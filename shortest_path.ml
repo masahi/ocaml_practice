@@ -35,6 +35,14 @@ let build_graph edge_list =
   List.fold_left (fun acc edge -> update_edge_list acc (reverse_edge edge)) g edge_list 
 
 let shortest_path graph src dst =
+  let update_edge heap dist_map (neighbor, weight) current_dist parents =
+    let new_dist = current_dist +. weight in
+    match DistMap.find_opt neighbor dist_map with
+    | Some (d, _) when d < new_dist -> (heap, dist_map)
+    | _ ->
+      let new_dist_map = DistMap.add neighbor (new_dist, parents) dist_map in
+      Heap.add heap (neighbor, new_dist);
+      (heap, new_dist_map) in
   let rec loop heap dist_map =
     match Heap.pop heap with
     | None -> (heap, dist_map)
@@ -42,14 +50,8 @@ let shortest_path graph src dst =
       let edge_list = Graph.find n graph in
       let (_, parents) = DistMap.find n dist_map in
       let new_heap, new_dist_map =
-        List.fold_left (fun (new_heap, new_dist_map) (neighbor, weight) ->
-          let new_dist = dist +. weight in
-          match DistMap.find_opt neighbor new_dist_map with
-          | Some (d, _) when d < new_dist -> (new_heap, new_dist_map)
-          | _ ->
-            let new_dist_map = DistMap.add neighbor (new_dist, n :: parents) new_dist_map in
-            Heap.add new_heap (neighbor, new_dist);
-            (new_heap, new_dist_map))
+        List.fold_left (fun (new_heap, new_dist_map) edge ->
+            update_edge new_heap new_dist_map edge dist (n :: parents))
           (heap, dist_map) edge_list in
       loop new_heap new_dist_map
   in
