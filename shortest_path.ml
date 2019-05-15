@@ -1,6 +1,6 @@
 open Metro
 
-module DistMap = Map.Make(String)
+module DistMap = Treemap.Make(String)
 module Heap = Core_kernel.Heap
 
 type node = string
@@ -24,7 +24,6 @@ module Graph = struct
     M.insert g src ((dst, weight) :: edges)
 end
 
-
 let lookup_name k name_list =
   let {romaji; _} = List.find (fun {kanji; _} -> kanji = k) name_list in
   romaji
@@ -47,10 +46,10 @@ let build_graph edge_list =
 let shortest_path graph src dst =
   let update_edge heap dist_map (neighbor, weight) current_dist parents =
     let new_dist = current_dist +. weight in
-    match DistMap.find_opt neighbor dist_map with
+    match DistMap.lookup dist_map neighbor with
     | Some (d, _) when d < new_dist -> (heap, dist_map)
     | _ ->
-      let new_dist_map = DistMap.add neighbor (new_dist, parents) dist_map in
+      let new_dist_map = DistMap.insert dist_map neighbor (new_dist, parents) in
       Heap.add heap (neighbor, new_dist);
       (heap, new_dist_map) in
   let rec loop heap dist_map =
@@ -58,7 +57,10 @@ let shortest_path graph src dst =
     | None -> (heap, dist_map)
     | Some (n, dist) ->
       let edge_list = Graph.get_edges graph n in
-      let (_, parents) = DistMap.find n dist_map in
+      let parents =
+        match DistMap.lookup dist_map n with
+        | None -> []
+        | Some (_, parents) -> parents in
       let new_heap, new_dist_map =
         List.fold_left (fun (new_heap, new_dist_map) edge ->
             update_edge new_heap new_dist_map edge dist (n :: parents))
@@ -68,20 +70,11 @@ let shortest_path graph src dst =
   let cmp (_, dist1) (_, dist2) = Float.compare dist1 dist2 in
   let heap = Heap.create ~cmp () in
   Heap.add heap (src, 0.0);
-  let init_dist_map = DistMap.singleton src (0.0, []) in
+  let init_dist_map = DistMap.insert DistMap.empty src (0.0, []) in
   let _, final_dist_map = loop heap init_dist_map in
-  match DistMap.find_opt dst final_dist_map with
+  match DistMap.lookup final_dist_map dst with
   | None -> assert false
   | Some (d, path) -> (d, List.rev path)
-
-(* let print_edge {src; dst; weight} =
- *   Printf.printf "src=%s, dst=%s, weight = %f\n" src dst weight *)
-
-(* let print_graph graph =
- *   Graph.iter (fun node edges ->
- *       Printf.printf "src %s ->" node;
- *       List.iter (fun (dst, weight) -> Printf.printf " (%s, %f), " dst weight) edges;
- *       print_string "\n";) graph *)
 
 let () =
   let edge_list = get_edge_list global_ekimei_list global_ekikan_list in
