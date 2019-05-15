@@ -35,33 +35,32 @@ let build_graph edge_list =
   List.fold_left (fun acc edge -> update_edge_list acc (reverse_edge edge)) g edge_list 
 
 let shortest_path graph src dst =
-  let cmp (_, dist1) (_, dist2) = Float.compare dist1 dist2 in
-  let heap = Heap.create ~cmp () in
-  let dist_map = DistMap.empty in
   let rec loop heap dist_map =
     match Heap.pop heap with
     | None -> (heap, dist_map)
     | Some (n, dist) ->
-      let new_dist_map = DistMap.add n dist dist_map in
       let edge_list = Graph.find n graph in
+      let (_, parents) = DistMap.find n dist_map in
       let new_heap, new_dist_map =
         List.fold_left (fun (new_heap, new_dist_map) (neighbor, weight) ->
           let new_dist = dist +. weight in
           match DistMap.find_opt neighbor new_dist_map with
-          | Some d when d < new_dist -> (new_heap, new_dist_map)
+          | Some (d, _) when d < new_dist -> (new_heap, new_dist_map)
           | _ ->
-            let new_dist_map = DistMap.add neighbor new_dist new_dist_map in
+            let new_dist_map = DistMap.add neighbor (new_dist, n :: parents) new_dist_map in
             Heap.add new_heap (neighbor, new_dist);
             (new_heap, new_dist_map))
-          (heap, new_dist_map) edge_list in
+          (heap, dist_map) edge_list in
       loop new_heap new_dist_map
   in
+  let cmp (_, dist1) (_, dist2) = Float.compare dist1 dist2 in
+  let heap = Heap.create ~cmp () in
   Heap.add heap (src, 0.0);
-  let init_dist_map = DistMap.add src 0.0 dist_map in
+  let init_dist_map = DistMap.add src (0.0, []) DistMap.empty in
   let _, final_dist_map = loop heap init_dist_map in
   match DistMap.find_opt dst final_dist_map with
   | None -> assert false
-  | Some d -> d
+  | Some (d, path) -> (d, List.rev path)
 
 let print_edge {src; dst; weight} =
   Printf.printf "src=%s, dst=%s, weight = %f\n" src dst weight
@@ -73,11 +72,11 @@ let print_graph graph =
       print_string "\n";) graph
 
 let () =
-  (* let node_list = get_node_list global_ekimei_list in *)
   let edge_list = get_edge_list global_ekimei_list global_ekikan_list in
   let graph = build_graph edge_list in
-  (* Printf.printf "num_nodes %d, num edges: %d\n" (List.length node_list) (List.length edge_list);
-   * print_graph graph; *)
-  (* let dist = shortest_path graph "shibuya" "gokokuji" in *)
-  let dist = shortest_path graph "myogadani" "meguro" in
-  Printf.printf "%f\n" dist
+  let (src, dst) = ("myogadani", "meguro") in
+  let (dist, path) = shortest_path graph src dst in
+  Printf.printf "Distance: %f\n" dist;
+  Printf.printf "Path: ";
+  List.iter (fun n -> Printf.printf " %s -> " n) path;
+  Printf.printf "%s\n" dst
