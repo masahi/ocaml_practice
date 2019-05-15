@@ -14,15 +14,35 @@ module type S = sig
   val lookup : 'a t -> key -> 'a option
 end
 
-module Map1(C : Ordered) = struct
-  module StdMap = Map.Make(C)
+(* module Map1(C : Ordered) = struct
+ *   module StdMap = Map.Make(C)
+ *   type key = C.t
+ *   type 'a t = 'a StdMap.t
+ *   let empty = StdMap.empty
+ *   let insert map key value = StdMap.add key value map
+ *   let lookup map key = StdMap.find_opt key map
+ * end *)
+
+module MapCore(C : Ordered) = struct
+  open Base
+  module Comp = struct
+    module T = struct
+      type t = C.t
+      let compare = C.compare
+      let sexp_of_t _ =
+        let open Sexp in
+        List []
+    end
+    include T
+    include Comparator.Make(T)
+  end
+
   type key = C.t
-  type 'a t = 'a StdMap.t
-  let empty = StdMap.empty
-  let insert map key value = StdMap.add key value map
-  let lookup map key = StdMap.find_opt key map
+  type 'a t = (key, 'a, Comp.comparator_witness) Map.t
+  let empty = Map.empty (module Comp)
+  let insert map key data = Map.set map ~key ~data
+  let lookup map key = Map.find map key
 end
 
-
-module Make(C : Ordered) = Map1(C)
+module Make(C : Ordered) = MapCore(C)
 
