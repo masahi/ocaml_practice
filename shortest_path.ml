@@ -58,6 +58,7 @@ let shortest_path graph src dst =
 
 let run src dst edge_list =
   let graph = build_graph edge_list in
+  print_string "Graph loaded.\n";
   Out_channel.flush stdout;
   let (dist, path) = shortest_path graph src dst in
   Printf.printf "Distance: %f\n" dist;
@@ -73,10 +74,8 @@ let run_tokyo_metro () =
   |> run src dst
 
 let run_dimacs () =
-  let edge_list = Dimacs.load_edge_list "USA-road-d.NY.gr" in
-  Printf.printf "len: %d\n" (List.length edge_list);
   let (src, dst) = ("500", "9998") in
-  run src dst edge_list
+  Dimacs.load_edge_list "USA-road-d.W.gr" |> run src dst
 
 let () =
   run_tokyo_metro ();
