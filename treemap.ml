@@ -12,6 +12,10 @@ module type S = sig
   val insert : 'a t -> key -> 'a -> 'a t
 
   val lookup : 'a t -> key -> 'a option
+
+  val keys : 'a t -> key list
+
+  val length : 'a t -> int
 end
 
 (* module Map1(C : Ordered) = struct
@@ -41,7 +45,9 @@ module MapCore(C : Ordered) = struct
   type 'a t = (key, 'a, Comp.comparator_witness) Map.t
   let empty = Map.empty (module Comp)
   let insert map key data = Map.set map ~key ~data
-  let lookup map key = Map.find map key
+  let lookup = Map.find
+  let keys = Map.keys
+  let length = Map.length
 end
 
 module Make(C : Ordered) = MapCore(C)
