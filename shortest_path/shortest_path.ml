@@ -49,11 +49,14 @@ let run src dst edge_list =
   Printf.printf "Distance: %f\n" dist;
   Printf.printf "Path: ";
   List.iter ~f:(fun n -> Printf.printf " %s -> " n) path;
-  Printf.printf "%s\n" dst
+  Printf.printf "%s\n" dst;
+  let open Core_bench in
+  [Bench.Test.create ~name:"shortest_path" (fun () -> ignore (shortest_path graph src dst))]
+  |> Bench.bench
 
 let run_dimacs () =
-  let (src, dst) = ("500", "9998") in
-  Dimacs.load_edge_list "USA-road-d.NY.gr" |> run src dst
+  let (src, dst) = ("500", "1000") in
+  Dimacs.load_edge_list "rome99.gr" |> run src dst
 
 let () =
   run_dimacs ()
