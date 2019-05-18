@@ -44,5 +44,5 @@ let uniform_uint32 rng =
 let uniform_float rng a =
   let random_int = uniform_uint32 rng in
   let random_float = (float_of_int random_int /. float_of_int (Int32.to_int Int32.max_int)) in
-  if one_minus_eps < random_float then one_minus_eps
-  else random_float
+  if one_minus_eps < random_float then one_minus_eps *. a
+  else random_float *. a

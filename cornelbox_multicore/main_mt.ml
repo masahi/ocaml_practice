@@ -64,7 +64,6 @@ let main () =
     let height_per_thread = height / num_thread in
     let buffer = Array.init (height * width) (fun i -> { r = 0.0; g = 0.0; b = 0.0 }) in
 
-    (* TODO: Currently bottle necked by random number generator, possibly due to false sharing *)
     let thread_func thread_id =
       Domain.spawn (fun () ->
           let y_start = height_per_thread * thread_id in
