@@ -1,8 +1,3 @@
-module type Ordered = sig
-  type t
-  val compare : t -> t -> int
-end
-
 module type S = sig
   type key
   type 'a t
@@ -16,4 +11,4 @@ module type S = sig
   val keys : 'a t -> key list
 end
 
-module Make(C : Ordered) : S with type key = C.t
+module Make(C : Types.Ordered) : S with type key = C.t

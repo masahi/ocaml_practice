@@ -1,8 +1,3 @@
-module type Ordered = sig
-  type t
-  val compare : t -> t -> int
-end
-
 module type S = sig
   type key
   type 'a t
@@ -16,7 +11,7 @@ module type S = sig
   val keys : 'a t -> key list
 end
 
-module Map23(C : Ordered) = struct
+module Map23(C : Types.Ordered) = struct
   type key = C.t
   type 'a pair = key * 'a
 
@@ -135,8 +130,7 @@ end
  *   let insert map key data = Map.set map ~key ~data
  *   let lookup = Map.find
  *   let keys = Map.keys
- *   let length = Map.length
  * end *)
 
-module Make(C : Ordered) = Map23(C)
+module Make(C : Types.Ordered) = Map23(C)
 

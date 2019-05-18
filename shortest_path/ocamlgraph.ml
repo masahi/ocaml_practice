@@ -1,12 +1,11 @@
 module OcamlGraph = Graph
-open Types
 open Base
 
 module G = struct
-  type t = (node * float) list Graph.M.t
+  type t = Decl.Graph.t
 
   module V = struct
-    type t = node
+    type t = string
     let compare = String.compare
     let hash = String.hash
     let equal = String.equal
@@ -22,26 +21,32 @@ module G = struct
   end
 
   let iter_vertex f graph =
-    Graph.get_nodes graph |> List.iter ~f
+    Decl.Graph.get_nodes graph |> List.iter ~f
 
   let fold_vertex f graph init =
-     Graph.get_nodes graph |> List.fold_right ~f ~init
+     Decl.Graph.get_nodes graph |> List.fold_right ~f ~init
 
   let iter_succ f graph node =
-    Graph.get_neighbors graph node |> List.iter ~f
+    Decl.Graph.get_neighbors graph node |> List.iter ~f
 
   let iter_succ_e f graph node =
-    Graph.get_edges graph node |>
-    List.iter ~f:(fun (nei, w) -> f (node, nei, w))
+    Decl.Graph.get_edges graph node |>
+    List.iter ~f:(fun edge ->
+        let nei = Decl.Graph.get_edge_dst edge in
+        let w = Decl.Graph.get_edge_weight edge in
+        f (node, nei, w))
 
   let fold_edges_e f graph init =
-    Graph.get_nodes graph |>
+    Decl.Graph.get_nodes graph |>
     List.fold_right ~init ~f:(fun n acc ->
-        Graph.get_edges graph n |>
+        Decl.Graph.get_edges graph n |>
         List.fold_right ~init:acc
-          ~f:(fun (nei, w) acc -> f (n, nei, w) acc))
+          ~f:(fun edge acc ->
+              let nei = Decl.Graph.get_edge_dst edge in
+              let w = Decl.Graph.get_edge_weight edge in
+              f (n, nei, w) acc))
 
-  let nb_vertex graph = Graph.get_nodes graph |> List.length
+  let nb_vertex graph = Decl.Graph.get_nodes graph |> List.length
 end
 
 module W = struct

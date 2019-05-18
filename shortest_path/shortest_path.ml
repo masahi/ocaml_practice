@@ -1,15 +1,17 @@
 open Core_kernel
-open Types
 
 module DistMap = Treemap.Make(String)
 module Heap = Core_kernel.Heap
+module Graph = Decl.Graph
 
 let build_graph edge_list =
-  let update_edge_list graph (src, {dst; weight}) = Graph.add_edge graph src dst weight in
+  let update_edge_list graph (src, dst, weight) = Graph.add_edge graph src dst weight in
   List.fold_left ~f:(fun acc edge -> update_edge_list acc edge) ~init:Graph.empty edge_list
 
 let shortest_path graph src dst =
-  let update_edge heap dist_map (neighbor, weight) current_dist parents =
+  let update_edge heap dist_map edge current_dist parents =
+    let neighbor = Graph.get_edge_dst edge in
+    let weight = Graph.get_edge_weight edge in
     let new_dist = current_dist +. weight in
     match DistMap.lookup dist_map neighbor with
     | Some (d, _) when d <= new_dist -> (heap, dist_map)
@@ -22,11 +24,11 @@ let shortest_path graph src dst =
     | None -> (heap, dist_map)
     | Some (n, _) when n = dst -> (heap, dist_map)
     | Some (n, dist) ->
-      let edge_list = Graph.get_edges graph n in
       let parents =
         match DistMap.lookup dist_map n with
         | None -> []
         | Some (_, parents) -> parents in
+      let edge_list = Graph.get_edges graph n in
       let new_heap, new_dist_map =
         List.fold_left ~f:(fun (new_heap, new_dist_map) edge ->
             update_edge new_heap new_dist_map edge dist (n :: parents))
@@ -60,17 +62,7 @@ let run src dst edge_list =
   let open Core_bench in
   [Bench.Test.create ~name:"shortest_path" (fun () -> ignore (shortest_path graph src dst));
    Bench.Test.create ~name:"ocamlgraph" (fun () -> ignore (Ocamlgraph.run_dijkstra graph src dst))]
-  |> Bench.bench;
-  print_string "Running johnson.\n"; Out_channel.flush stdout;
-  match Ocamlgraph.run_johnson graph with
-  | [] -> assert false
-  | hd :: tl ->
-    let (n1, n2, w) =
-      let cmp (_, _, w1) (_, _, w2) = Float.compare w1 w2 in
-      List.fold_right tl ~init:hd ~f:(fun p acc ->
-          if cmp acc p < 0 then p
-          else acc) in
-    Printf.printf "longest shortest path: (%s, %s, %f).\n" n1 n2 w
+  |> Bench.bench
 
 let run_dimacs () =
   let (src, dst) = ("500", "5000") in
