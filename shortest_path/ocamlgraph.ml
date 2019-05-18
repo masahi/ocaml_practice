@@ -51,6 +51,7 @@ module W = struct
   let compare = Float.compare
   let add = Float.add
   let zero = Float.zero
+  let sub = Float.sub
 end
 
 let run_dijkstra graph src dst =
@@ -58,3 +59,8 @@ let run_dijkstra graph src dst =
   let (edge_list, dist) = Dijkstra.shortest_path graph src dst in
   let path = List.map ~f:(fun (src, _, _) -> src) edge_list in
   (dist, path)
+
+let run_johnson graph =
+  let module Johnson = OcamlGraph.Path.Johnson(G)(W) in
+  let dist_table = Johnson.all_pairs_shortest_paths graph in
+  Johnson.HVV.fold (fun (n1, n2) w acc -> (n1, n2, w) :: acc) dist_table []

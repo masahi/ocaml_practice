@@ -51,14 +51,26 @@ let output header dist path dst=
 
 let run src dst edge_list =
   let graph = build_graph edge_list in
-  List.iter [("Solution:", shortest_path); ("Solution by Ocamlgraph:", Ocamlgraph.run_dijkstra)]
+  List.iter [
+    ("Solution:", shortest_path);
+    ("Solution by Ocamlgraph:", Ocamlgraph.run_dijkstra)]
     ~f:(fun (header, algo) ->
         let (dist, path) = algo graph src dst in
         output header dist path dst);
   let open Core_bench in
   [Bench.Test.create ~name:"shortest_path" (fun () -> ignore (shortest_path graph src dst));
    Bench.Test.create ~name:"ocamlgraph" (fun () -> ignore (Ocamlgraph.run_dijkstra graph src dst))]
-  |> Bench.bench
+  |> Bench.bench;
+  print_string "Running johnson.\n"; Out_channel.flush stdout;
+  match Ocamlgraph.run_johnson graph with
+  | [] -> assert false
+  | hd :: tl ->
+    let (n1, n2, w) =
+      let cmp (_, _, w1) (_, _, w2) = Float.compare w1 w2 in
+      List.fold_right tl ~init:hd ~f:(fun p acc ->
+          if cmp acc p < 0 then p
+          else acc) in
+    Printf.printf "longest shortest path: (%s, %s, %f).\n" n1 n2 w
 
 let run_dimacs () =
   let (src, dst) = ("500", "5000") in
