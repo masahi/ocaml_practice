@@ -13,9 +13,7 @@ module type S = sig
 
   val lookup : 'a t -> key -> 'a option
 
-  (* val keys : 'a t -> key list
-   *
-   * val length : 'a t -> int *)
+  val keys : 'a t -> key list
 end
 
 module Make(C : Ordered) : S with type key = C.t

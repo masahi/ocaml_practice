@@ -9,10 +9,15 @@ module Graph = struct
 
   let empty = M.empty
 
+  let get_nodes g = M.keys g
+
   let get_edges g node =
     match M.lookup g node with
     | None -> []
     | Some edge_list -> edge_list
+
+  let get_neighbors g node =
+    get_edges g node |> List.map (fun (dst, _) -> dst)
 
   let add_edge g src dst weight =
     let edges = get_edges g src in

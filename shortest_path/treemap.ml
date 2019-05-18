@@ -12,6 +12,8 @@ module type S = sig
   val insert : 'a t -> key -> 'a -> 'a t
 
   val lookup : 'a t -> key -> 'a option
+
+  val keys : 'a t -> key list
 end
 
 module Map23(C : Ordered) = struct
@@ -104,6 +106,13 @@ module Map23(C : Ordered) = struct
       if cmp < 0 then lookup left k
       else if cmp = 0 then Some v1
       else lookup (Two (mid, p2, right)) k
+
+  let rec keys =function
+    | Leaf -> []
+    | Two (left, (k, _), right) ->
+      keys left @ [k] @ keys right
+    | Three (left, (k1, _), mid, (k2, _), right) ->
+      keys left @ [k1] @ keys mid @ [k2] @ keys right
 end
 
 (* module MapCore(C : Ordered) = struct
