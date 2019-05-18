@@ -36,8 +36,13 @@ let create seq_index =
 
 let one_minus_eps = (1. -. epsilon_float)
 
+let uniform_uint32 rng =
+  let i = Int32.to_int (uniform_int32 rng) in
+  if i > 0 then i
+  else -i
+
 let uniform_float rng a =
-  let random_int = uniform_int32 rng in
-  let random_float = (Int32.to_float random_int /. float_of_int (Int32.to_int Int32.max_int)) in
+  let random_int = uniform_uint32 rng in
+  let random_float = (float_of_int random_int /. float_of_int (Int32.to_int Int32.max_int)) in
   if one_minus_eps < random_float then one_minus_eps
   else random_float
