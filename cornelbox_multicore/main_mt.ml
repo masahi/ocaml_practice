@@ -73,7 +73,7 @@ let main () =
               List_aux.iota 0 width |> List.iter (fun x ->
                   let t1 = (float_of_int x) /. (float_of_int (width - 1)) in
                   let t2 = (float_of_int y) /. (float_of_int (height - 1)) in
-                  let color = render_pixel cam t1 t2 settings objs in
+                  let color = render_pixel cam t1 t2 settings objs (Pcg.create (Int64.of_int (x + y * width))) in
                   buffer.((height - 1 - y) * width + x) <- color;))) in
 
     List_aux.iota 0 num_thread |> List.map (fun i -> thread_func i) |>  List.iter (fun d -> Domain.join d);

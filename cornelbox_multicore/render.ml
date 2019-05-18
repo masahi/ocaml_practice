@@ -67,22 +67,22 @@ let make_cam_ray (cam : camera) (t1 : float) (t2 : float) (pixel_size_x : float)
     dir = normalize (p @- cam.transform.translation)
   }
 
-let tbn_of_normal normal =
+let tbn_of_normal normal rng =
   let random_vec = (normalize {
-    x = ((Random.float 2.0) -. 1.0);
-    y = ((Random.float 2.0) -. 1.0);
-    z = ((Random.float 2.0) -. 1.0)
+    x = ((Pcg.uniform_float rng 2.0) -. 1.0);
+    y = ((Pcg.uniform_float rng 2.0) -. 1.0);
+    z = ((Pcg.uniform_float rng 2.0) -. 1.0)
   }) in
   let tangent = cross normal random_vec in
   let bitangent = cross tangent normal in
   (tangent, bitangent, normal)
 
-let hemisphere_sample normal =
-  match tbn_of_normal normal with
+let hemisphere_sample normal rng =
+  match tbn_of_normal normal rng with
   | (t, b, n) ->
-    (t @* ((Random.float 2.0) -. 1.0)) @+
-    (b @* ((Random.float 2.0) -. 1.0)) @+
-    (n @* (Random.float 1.0))
+    (t @* ((Pcg.uniform_float rng 2.0) -. 1.0)) @+
+    (b @* ((Pcg.uniform_float rng 2.0) -. 1.0)) @+
+    (n @* (Pcg.uniform_float rng 1.0))
 
 let rec raycast (r : ray) (objs : scene_object list) : (hit_info * scene_object) option =
   match objs with
@@ -98,7 +98,7 @@ let rec raycast (r : ray) (objs : scene_object list) : (hit_info * scene_object)
         then Some (hit1, obj)
         else Some (hit2, obj2)
 
-let rec path_trace_bounce (r : ray) objs bounces =
+let rec path_trace_bounce (r : ray) objs bounces rng =
   if bounces = 0 then
     { r = 0.0; g = 0.0; b = 0.0 }
   else
@@ -109,24 +109,24 @@ let rec path_trace_bounce (r : ray) objs bounces =
       | Lambertian c ->
         let new_ray = {
           p0  = hit.point @+ (hit.normal @* 10e-8);
-          dir = hemisphere_sample hit.normal
+          dir = hemisphere_sample hit.normal rng
         } in
-        ((path_trace_bounce new_ray objs (bounces - 1)) %. c) %* 0.99
+        ((path_trace_bounce new_ray objs (bounces - 1) rng) %. c) %* 0.99
       | Light _ -> { r = 1.0; g = 1.0; b = 1.0; }
 
 let rec path_trace_average
   cam t1 t2 settings objs
-  paths_left partial_color =
+  paths_left partial_color rng =
   if paths_left = 0 then
     partial_color %/ (float_of_int settings.paths_per_pixel)
   else
     let r = make_cam_ray cam t1 t2 settings.pixel_size_x settings.pixel_size_y in
-    let color = path_trace_bounce r objs settings.bounces in
+    let color = path_trace_bounce r objs settings.bounces rng in
     path_trace_average
       cam t1 t2 settings objs
-      (paths_left - 1) (partial_color %+ color)
+      (paths_left - 1) (partial_color %+ color) rng
 
-let render_pixel cam t1 t2 settings objs =
+let render_pixel cam t1 t2 settings objs rng =
   path_trace_average
     cam t1 t2 settings objs
-    settings.paths_per_pixel { r = 0.0; g = 0.0; b = 0.0 }
+    settings.paths_per_pixel { r = 0.0; g = 0.0; b = 0.0 } rng

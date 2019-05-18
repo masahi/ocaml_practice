@@ -66,7 +66,7 @@ let main () =
       for x = 0 to (width - 1) do
         let t1 = (float_of_int x) /. (float_of_int (width - 1)) in
         let t2 = (float_of_int y) /. (float_of_int (height - 1)) in
-        let color = render_pixel cam t1 t2 settings objs in
+        let color = render_pixel cam t1 t2 settings objs (Pcg.create (Int64.of_int (x + y * width))) in
         buffer.(y * width + x) <- color
       done
     done;
