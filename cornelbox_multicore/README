@@ -1,0 +1,12 @@
+On my 6 core machine using 6 threads, I got 4.5 speedup using multicore ocaml.
+
+$ time ./main_st
+real	0m9.061s
+user	0m9.050s
+sys	0m0.012s
+
+$ time ./main_mt
+
+real	0m2.089s
+user	0m10.811s
+sys	0m0.008s

@@ -60,7 +60,7 @@ let main () =
   } in
   let oc = open_out "render.ppm" in begin
     fprintf oc "P6\n%d %d\n255\n" width height;
-    let num_thread = 4 in
+    let num_thread = 6 in
     let height_per_thread = height / num_thread in
     let buffer = Array.init (height * width) (fun i -> { r = 0.0; g = 0.0; b = 0.0 }) in
 

@@ -56,10 +56,10 @@ let cam_frame_local_to_world (cam : camera) (t1 : float) (t2 : float) =
   } in
   (apply_transform3 cam.transform local_point)
 
-let make_cam_ray (cam : camera) (t1 : float) (t2 : float) (pixel_size_x : float) (pixel_size_y : float) =
+let make_cam_ray (cam : camera) (t1 : float) (t2 : float) (pixel_size_x : float) (pixel_size_y : float) rng =
   let p = (cam_frame_local_to_world cam t1 t2) @+ {
-    x = ((Random.float 1.0) -. 0.5) *. pixel_size_x;
-    y = ((Random.float 1.0) -. 0.5) *. pixel_size_y;
+    x = ((Pcg.uniform_float rng 1.0) -. 0.5) *. pixel_size_x;
+    y = ((Pcg.uniform_float rng 1.0) -. 0.5) *. pixel_size_y;
     z = 0.0;
   } in
   {
@@ -120,7 +120,7 @@ let rec path_trace_average
   if paths_left = 0 then
     partial_color %/ (float_of_int settings.paths_per_pixel)
   else
-    let r = make_cam_ray cam t1 t2 settings.pixel_size_x settings.pixel_size_y in
+    let r = make_cam_ray cam t1 t2 settings.pixel_size_x settings.pixel_size_y rng in
     let color = path_trace_bounce r objs settings.bounces rng in
     path_trace_average
       cam t1 t2 settings objs
