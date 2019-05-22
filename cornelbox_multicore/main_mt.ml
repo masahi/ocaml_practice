@@ -62,7 +62,7 @@ let main () =
     fprintf oc "P6\n%d %d\n255\n" width height;
     let num_thread = 6 in
     let height_per_thread = height / num_thread in
-    let buffer = Array.init (height * width) (fun i -> { r = 0.0; g = 0.0; b = 0.0 }) in
+    let buffer = Array.init (height * width) (fun _ -> { r = 0.0; g = 0.0; b = 0.0 }) in
 
     let thread_func thread_id =
       Domain.spawn (fun () ->
