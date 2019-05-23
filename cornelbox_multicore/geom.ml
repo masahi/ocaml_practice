@@ -16,7 +16,7 @@ module type Intf = sig
   val intersect_ray : t -> ray -> hit_info option
 end
 
-module type S = sig
+module type Object = sig
   module M: Intf
   val this: M.t
 end
@@ -85,10 +85,10 @@ let sphere ~center ~radius=
   (module struct
     module M = Shapes.Sphere
     let this = M.create center radius
-  end : S)
+  end : Object)
 
 let plane ~pos ~normal =
   (module struct
     module M = Shapes.Plane
     let this = M.create pos normal
-  end : S)
+  end : Object)

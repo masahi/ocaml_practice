@@ -16,10 +16,10 @@ module type Intf = sig
   val intersect_ray: t -> ray -> hit_info option
 end
 
-module type S = sig
+module type Object = sig
   module M: Intf
   val this: M.t
 end
 
-val sphere: center:vec3 -> radius:float -> (module S)
-val plane: pos:vec3 -> normal:vec3 -> (module S)
+val sphere: center:vec3 -> radius:float -> (module Object)
+val plane: pos:vec3 -> normal:vec3 -> (module Object)

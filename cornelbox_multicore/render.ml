@@ -19,7 +19,7 @@ type material =
 
 type scene_object = {
   material : material;
-  geometry : (module Geom.S);
+  geometry : (module Geom.Object);
 }
 
 type camera = {
@@ -55,7 +55,7 @@ let cam_frame_local_to_world (cam : camera) (t1 : float) (t2 : float) =
   } in
   (apply_transform3 cam.transform local_point)
 
-let make_cam_ray (cam : camera) (t1 : float) (t2 : float) (pixel_size_x : float) (pixel_size_y : float) rng =
+let make_cam_ray cam t1 t2 pixel_size_x pixel_size_y rng =
   let p = (cam_frame_local_to_world cam t1 t2) @+ {
       x = ((Pcg.uniform_float rng 1.0) -. 0.5) *. pixel_size_x;
       y = ((Pcg.uniform_float rng 1.0) -. 0.5) *. pixel_size_y;
@@ -88,8 +88,8 @@ let rec raycast r objs =
   match objs with
   | [] -> None
   | obj :: rest ->
-    let {geometry=(module Obj: Geom.S); _} = obj in
-    match Obj.M.intersect_ray Obj.this r with
+    let {geometry=(module O: Geom.Object); _} = obj in
+    match O.M.intersect_ray O.this r with
     | None -> raycast r rest
     | Some hit1 ->
       match raycast r rest with

@@ -1,19 +1,13 @@
-module State = struct
-  type t = {
-    mutable state: int64;
-    mutable inc: int64;
-  }
+type t = {
+  mutable state: int64;
+  mutable inc: int64;
+}
 
-  let create () = {state = 0L; inc = 0L}
-end
-
-type t = State.t
-
-let update_state (rng:State.t) =
+let update_state rng =
   rng.state <- Int64.(add (mul rng.state 0x5851f42d4c957f2dL) rng.inc)
 
 let uniform_int32 rng =
-  let old_s = rng.State.state in
+  let old_s = rng.state in
   update_state rng;
   let (lsr) = Int64.shift_right_logical
   and (lxor) = Int64.logxor in
@@ -27,7 +21,7 @@ let uniform_int32 rng =
   (xor_shifted lsr rot) lor (xor_shifted lsl ((-rot) land 31))
 
 let create seq_index =
-  let s = State.create () in
+  let s = {state = 0L; inc = 0L} in
   s.inc <- Int64.(logor (shift_left seq_index 1) 1L);
   update_state s;
   s.state <- Int64.(add s.state 0x853c49e6748fea9bL);
