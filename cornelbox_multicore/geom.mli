@@ -1,0 +1,25 @@
+open Math
+
+type ray = {
+  p0 : vec3;
+  dir : vec3;
+}
+
+type hit_info = {
+  point : vec3;
+  normal : vec3;
+  distance : float;
+}
+
+module type Intf = sig
+  type t
+  val intersect_ray: t -> ray -> hit_info option
+end
+
+module type S = sig
+  module M: Intf
+  val this: M.t
+end
+
+val sphere: center:vec3 -> radius:float -> (module S)
+val plane: pos:vec3 -> normal:vec3 -> (module S)

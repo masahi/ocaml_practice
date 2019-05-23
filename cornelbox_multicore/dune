@@ -1,5 +1,2 @@
 (executable
  (name main_mt))
-
-(executable
- (name main_st))

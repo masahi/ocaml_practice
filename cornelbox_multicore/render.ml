@@ -1,5 +1,4 @@
 open Math
-open Geom
 
 type color = {
   r : float;
@@ -20,7 +19,7 @@ type material =
 
 type scene_object = {
   material : material;
-  geometry : geometry;
+  geometry : (module Geom.S);
 }
 
 type camera = {
@@ -58,10 +57,11 @@ let cam_frame_local_to_world (cam : camera) (t1 : float) (t2 : float) =
 
 let make_cam_ray (cam : camera) (t1 : float) (t2 : float) (pixel_size_x : float) (pixel_size_y : float) rng =
   let p = (cam_frame_local_to_world cam t1 t2) @+ {
-    x = ((Pcg.uniform_float rng 1.0) -. 0.5) *. pixel_size_x;
-    y = ((Pcg.uniform_float rng 1.0) -. 0.5) *. pixel_size_y;
-    z = 0.0;
-  } in
+      x = ((Pcg.uniform_float rng 1.0) -. 0.5) *. pixel_size_x;
+      y = ((Pcg.uniform_float rng 1.0) -. 0.5) *. pixel_size_y;
+      z = 0.0;
+    } in
+  let open Geom in
   {
     p0 = p;
     dir = normalize (p @- cam.transform.translation)
@@ -69,10 +69,10 @@ let make_cam_ray (cam : camera) (t1 : float) (t2 : float) (pixel_size_x : float)
 
 let tbn_of_normal normal rng =
   let random_vec = (normalize {
-    x = ((Pcg.uniform_float rng 2.0) -. 1.0);
-    y = ((Pcg.uniform_float rng 2.0) -. 1.0);
-    z = ((Pcg.uniform_float rng 2.0) -. 1.0)
-  }) in
+      x = ((Pcg.uniform_float rng 2.0) -. 1.0);
+      y = ((Pcg.uniform_float rng 2.0) -. 1.0);
+      z = ((Pcg.uniform_float rng 2.0) -. 1.0)
+    }) in
   let tangent = cross normal random_vec in
   let bitangent = cross tangent normal in
   (tangent, bitangent, normal)
@@ -84,11 +84,12 @@ let hemisphere_sample normal rng =
     (b @* ((Pcg.uniform_float rng 2.0) -. 1.0)) @+
     (n @* (Pcg.uniform_float rng 1.0))
 
-let rec raycast (r : ray) (objs : scene_object list) : (hit_info * scene_object) option =
+let rec raycast r objs =
   match objs with
   | [] -> None
   | obj :: rest ->
-    match raycast_geometry r obj.geometry with
+    let {geometry=(module Obj: Geom.S); _} = obj in
+    match Obj.M.intersect_ray Obj.this r with
     | None -> raycast r rest
     | Some hit1 ->
       match raycast r rest with
@@ -98,7 +99,7 @@ let rec raycast (r : ray) (objs : scene_object list) : (hit_info * scene_object)
         then Some (hit1, obj)
         else Some (hit2, obj2)
 
-let rec path_trace_bounce (r : ray) objs bounces rng =
+let rec path_trace_bounce r objs bounces rng =
   if bounces = 0 then
     { r = 0.0; g = 0.0; b = 0.0 }
   else
@@ -107,6 +108,7 @@ let rec path_trace_bounce (r : ray) objs bounces rng =
     | Some (hit, obj) ->
       match obj.material with
       | Lambertian c ->
+        let open Geom in
         let new_ray = {
           p0  = hit.point @+ (hit.normal @* 10e-8);
           dir = hemisphere_sample hit.normal rng
@@ -115,8 +117,8 @@ let rec path_trace_bounce (r : ray) objs bounces rng =
       | Light _ -> { r = 1.0; g = 1.0; b = 1.0; }
 
 let rec path_trace_average
-  cam t1 t2 settings objs
-  paths_left partial_color rng =
+    cam t1 t2 settings objs
+    paths_left partial_color rng =
   if paths_left = 0 then
     partial_color %/ (float_of_int settings.paths_per_pixel)
   else
