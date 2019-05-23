@@ -45,7 +45,7 @@ let output_color oc color =
     output_char oc b;
   end
 
-let cam_frame_local_to_world (cam : camera) (t1 : float) (t2 : float) =
+let cam_frame_local_to_world cam t1 t2 =
   let w = cam.frame_width in
   let h = (ceil (w /. cam.aspect_ratio)) in
   let local_point = {
@@ -53,7 +53,7 @@ let cam_frame_local_to_world (cam : camera) (t1 : float) (t2 : float) =
     y = -0.5 *. h *. (1.0 -. t2) +. 0.5 *. h *. t2;
     z = cam.distance_to_frame
   } in
-  (apply_transform3 cam.transform local_point)
+  apply_transform3 cam.transform local_point
 
 let make_cam_ray cam t1 t2 pixel_size_x pixel_size_y rng =
   let p = (cam_frame_local_to_world cam t1 t2) @+ {
@@ -82,13 +82,12 @@ let hemisphere_sample normal rng =
   | (t, b, n) ->
     (t @* ((Pcg.uniform_float rng 2.0) -. 1.0)) @+
     (b @* ((Pcg.uniform_float rng 2.0) -. 1.0)) @+
-    (n @* (Pcg.uniform_float rng 1.0))
+    (n @* Pcg.uniform_float rng 1.0)
 
 let rec raycast r objs =
   match objs with
   | [] -> None
-  | obj :: rest ->
-    let {geometry=(module O: Geom.Object); _} = obj in
+  | {geometry=(module O: Geom.Object); _} as obj :: rest ->
     match O.M.intersect_ray O.this r with
     | None -> raycast r rest
     | Some hit1 ->

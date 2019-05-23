@@ -32,6 +32,7 @@ let one_minus_eps = (1. -. epsilon_float)
 
 let uniform_uint32 rng =
   let i = Int32.to_int (uniform_int32 rng) in
+  (* TODO: fix this *)
   if i > 0 then i
   else -i
 
