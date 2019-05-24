@@ -1,12 +1,12 @@
+This implementation uses OCaml's first class module to emulate objects and dynamic dispatch.
 On my 6 core machine using 6 threads, I got 4.5 speedup using multicore ocaml.
 
-$ time ./main_st
-real	0m9.061s
-user	0m9.050s
-sys	0m0.012s
+$ time _build/default/main.exe 1
+real	0m10.602s
+user	0m10.593s
+sys	0m0.004s
 
-$ time ./main_mt
-
-real	0m2.089s
-user	0m10.811s
-sys	0m0.008s
+$ time _build/default/main.exe 6
+real	0m2.340s
+user	0m11.907s
+sys	0m0.025s
