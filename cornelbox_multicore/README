@@ -1,4 +1,3 @@
-This implementation uses OCaml's first class module to emulate objects and dynamic dispatch.
 On my 6 core machine using 6 threads, I got 4.5 speedup using multicore ocaml.
 
 $ time _build/default/main.exe 1
@@ -10,3 +9,22 @@ $ time _build/default/main.exe 6
 real	0m2.340s
 user	0m11.907s
 sys	0m0.025s
+
+
+This implementation uses OCaml's first class module to emulate objects and dynamic dispatch.
+Unfortunately, profiling revealed that the first class module based approach is slightly slower than an obvious variant based explicit dispatch.
+It seems the first class module introduces the OCaml runtime function caml_apply2, and that is taking non trivial execution time.
+
+Below is the output of perf after running main.exe implemented with first class module.
+
+Samples: 48K of event 'cycles:ppp', Event count (approx.): 52017942842
+Overhead  Command   Shared Object       Symbol
+  13.33%  main.exe  main.exe            [.] camlGeom__intersect_ray_1065
+   8.71%  main.exe  main.exe            [.] camlMath__dot_1025
+   7.42%  main.exe  main.exe            [.] caml_apply2
+   7.27%  main.exe  main.exe            [.] camlPcg__uniform_float_1024
+   7.08%  main.exe  main.exe            [.] camlGeom__intersect_ray_1039
+   6.68%  main.exe  main.exe            [.] camlPcg__uniform_int32_1007
+   5.91%  main.exe  main.exe            [.] camlRender__raycast_1293
+   5.44%  main.exe  main.exe            [.] camlPcg__uniform_uint32_1021
+   ...
