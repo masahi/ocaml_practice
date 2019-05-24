@@ -11,13 +11,11 @@ type hit_info = {
   distance : float;
 }
 
-module type Intf = sig
-  type t
-  val intersect_ray : t -> ray -> hit_info option
-end
-
 module type Object = sig
-  module M: Intf
+  module M: sig
+    type t
+    val intersect_ray: t -> ray -> hit_info option
+  end
   val this: M.t
 end
 

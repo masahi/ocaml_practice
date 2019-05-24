@@ -1,2 +1,6 @@
+;;(env
+;; (dev
+;;  (ocamlopt_flags (:standard -inline 20 -nodynlink -S -dlambda))))
+
 (executable
  (name main))
