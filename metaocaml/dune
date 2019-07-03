@@ -1,0 +1,4 @@
+(executable
+ (name power_bench)
+ (ocamlopt_flags (:standard -I +compiler-libs ocamlcommon.cmxa dynlink.cmxa codelib.cmx runnative.cmx))
+ (libraries core_bench))
