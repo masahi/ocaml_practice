@@ -15,13 +15,13 @@ let rec spower n x =
 let spowern n = .<fun x -> .~(spower n .<x>.)>.
 
 let _ =
-  let open Core_bench in
   let go n x =
     let power_staged = spowern n in
     Codelib.print_code Format.std_formatter power_staged; print_newline ();
     let spower_fn = Runnative.run power_staged in
     Printf.printf "%.10f\n" (spower_fn x);
     Printf.printf "%.10f\n" (power n x);
+    let open Core_bench in
     [Bench.Test.create ~name:"unstaged" (fun () -> ignore(power n x));
      Bench.Test.create ~name:"staged" (fun () -> ignore(spower_fn x))]
     |> Bench.bench
