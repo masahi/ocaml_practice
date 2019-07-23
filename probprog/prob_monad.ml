@@ -1,10 +1,12 @@
 module Dist = struct
   type prob = float
+
   type _ primitive =
     | Gaussian : float * float -> float primitive
     | Bernoulli : float -> bool primitive
     | UniformD : 'a list -> 'a primitive
     | Categorical: ('a * prob) list -> 'a primitive
+
   type _ t =
     | Return : 'a -> 'a t
     | Bind: 'b t * ('b -> 'a t) -> 'a t
@@ -13,22 +15,26 @@ module Dist = struct
 end
 
 module RandomSampling = struct
-  module M = Owl_base_stats
-  let normal mu sigma = M.gaussian_rvs ~mu ~sigma
+  let normal mu sigma = Owl_base_stats.gaussian_rvs ~mu ~sigma
+
   let bernoulli p =
-    let b = M.bernoulli_rvs ~p in
+    let b = Owl_base_stats.bernoulli_rvs ~p in
     if b > 0.0 then true
     else false
+
   let uniform_discrete choices =
     let length = List.length choices in
     let index = Owl_stats.uniform_int_rvs ~a:0 ~b:length-1 in
-    List.nth choices index
+    let open Base in
+    List.nth_exn choices index
+
   let categorical weighted_choices =
+    let open Base in
+    let (choices, weights) = List.unzip weighted_choices in
     let index =
-      List.map (fun (_, p) -> p) weighted_choices |> Array.of_list |> Owl_stats.categorical_rvs
+       Array.of_list weights |> Owl_stats.categorical_rvs
     in
-    match List.nth weighted_choices index with
-    | (a, _) -> a
+    List.nth_exn choices index
 end
 
 open Dist
