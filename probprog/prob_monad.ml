@@ -59,6 +59,12 @@ let rec sample_dist: type a'. a' Dist.t -> a' = function
   | Primitive(p) -> sample_prim p
   | Conditional(_) -> assert false
 
+let plot_hist ?(bin=10) fname x =
+  let open Owl_plplot in
+  let h = Plot.create fname in
+  Plot.histogram ~h ~bin x;
+  Plot.output h
+
 let () =
   let rv =
     let* x = Primitive(Gaussian(0.0, 1.0)) in
@@ -67,8 +73,10 @@ let () =
     if b then return (x +. y)
     else return (x -. y)
   in
-  let samples = Array.init 1000 (fun _ -> sample_dist rv) in
-  Array.iter (fun x -> Printf.printf "%f\n" x) samples
+  let open Owl in
+  let samples = Mat.init 1000 1 (fun _ -> sample_dist rv) in
+  plot_hist "gauss_sum2.png" samples
+
 
 let () =
   let prob = [(1, 0.05); (2, 0.1); (3, 0.15); (4, 0.2); (5, 0.2); (6, 0.3)] in
@@ -78,5 +86,6 @@ let () =
     let* x2 = loaded_die in
     return (x1 + x2)
   in
-  let samples = Array.init 1000 (fun _ -> sample_dist sum_dist) in
-  Array.iter (fun x -> Printf.printf "%d\n" x) samples
+  let open Owl in
+  let samples = Mat.init 1000 1 (fun _ -> float_of_int (sample_dist sum_dist)) in
+  plot_hist "loaded_die_sum2.png" samples
