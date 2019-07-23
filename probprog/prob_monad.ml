@@ -59,6 +59,21 @@ let rec sample_dist: type a'. a' Dist.t -> a' = function
   | Primitive(p) -> sample_prim p
   | Conditional(_) -> assert false
 
+let rec prior: type a'. a' Dist.t -> (a' * prob) Dist.t = function
+  | Conditional(likelihood, d) ->
+     let* (x, s) = prior d in
+     return (x, s *. (likelihood x))
+  | Bind(d, f) ->
+     let* (x, s) = prior d in
+     let* y = f x in
+     return (y, s)
+  | _ as d ->
+     let* x = d in
+     return (x, 1.0)
+
+(* let rec mh: type a'. a' Dist.t -> a' list Dist.t = fun d ->
+ *   let proposal = prior d in *)
+
 let plot_hist ?(bin=10) fname x =
   let open Owl_plplot in
   let h = Plot.create fname in
@@ -127,3 +142,43 @@ let () =
   let dist = student_t 10 in
   let samples = Mat.init 1000 1 (fun _ -> sample_dist dist) in
   plot_hist ~bin:50 "student_t_5.png" samples
+
+let () =
+  let data =
+    let num = 100 in
+    let slope = 2.0 in
+    let intercept = 5.0 in
+    let xs = List.init num (fun i -> float_of_int i) in
+    let ys_true = List.map (fun x -> x *. slope +. intercept) xs in
+    let ys_obs = List.map (fun y -> y +. (R.normal 0.0 5.0) *. 5.0) ys_true in
+    (xs, ys_obs)
+  in
+  let list_to_mat lst =
+    let len = List.length lst in
+    let arr = Array.of_list lst in
+    Owl.Mat.init len 1 (fun i -> arr.(i)) in
+  let (xs, ys_obs) = data in
+  let open Owl_plplot in
+  let h = Plot.create "linreg.png" in
+  Plot.plot ~h (list_to_mat xs) (list_to_mat ys_obs);
+  Plot.output h;
+  let normal = Primitive(Gaussian(0.0, 1.0)) in
+  let linear =
+    let* a = normal in
+    let* b = normal in
+    return (a, b)
+  in
+  let observe (x, y) prior =
+    let likelihood (a, b) =
+      let l = Owl_stats.gaussian_pdf y ~mu:(a *. x +. b) ~sigma:1.0 in
+      Printf.printf "(x, y): (%f, %f), (a, b): (%f,%f), mu: %f, l:%.20f \n" x y a b (a *. x +. b) l;
+      l
+    in
+    Conditional(likelihood, prior) in
+  let points =
+    Base.List.zip_exn xs ys_obs in
+  let conditional = List.fold_left (fun dist point -> observe point dist) linear points in
+  let proposal = prior conditional in
+  let samples = List.init 1000 (fun _ -> sample_dist proposal) in
+  let sorted = Base.List.sort samples ~compare:(fun (_, p1) (_, p2) -> Bool.to_int (p1 > p2)) in
+  List.iter (fun ((slope, intercept), p) -> Printf.printf "slope %f, intercept %f, prob %.20f\n" slope intercept p) sorted
