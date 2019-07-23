@@ -91,16 +91,20 @@ let () =
   plot_hist "loaded_die_sum2.png" samples
 
 
+let sample_sum dist n init binop unary_func =
+  let rec helper n acc =
+    if n = 0 then return acc
+    else
+      let* x = dist in
+      helper (n - 1) (binop acc (unary_func x))
+  in
+  helper n init
+
+
 let () =
   let binomial p n =
     let ber = Primitive(Bernoulli(p)) in
-    let rec helper n acc =
-      if n = 0 then return acc
-      else
-        let* x = ber in
-        helper (n - 1) (acc + (Bool.to_int x))
-    in
-    helper n 0
+    sample_sum ber n 0 (+) Bool.to_int
   in
   let dist = binomial 0.3 100 in
   let open Owl in
@@ -111,18 +115,12 @@ let () =
 let () =
   let normal = Primitive(Gaussian(0.0, 1.0)) in
   let chi2 k =
-    let rec helper n acc =
-      if n = 0 then return acc
-      else
-        let* x = normal in
-        helper (n - 1) (acc +. x *. x)
-    in
-    helper k 0.0
+    sample_sum normal k 0.0 (+.) (fun x -> x *. x)
   in
   let student_t df =
     let* z = normal in
     let* v = chi2 df in
-    let rv = z *. sqrt (float_of_int df /. v) in
+    let rv = z *. sqrt ((float_of_int df) /. v) in
     return rv
   in
   let open Owl in
