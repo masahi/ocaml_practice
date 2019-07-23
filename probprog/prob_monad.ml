@@ -41,9 +41,12 @@ open Dist
 module R = RandomSampling
 
 let bind d f = Bind(d, f)
-let (>>=) = bind
-let (let*) = (>>=)
+let (let*) d f = bind d f
 let return x = Return(x)
+let map d f =
+  let* x = d in
+  return (f x)
+let (let+) d f = map d f
 
 let sample_prim: type a'. a' Dist.primitive -> a' = function
   | Gaussian(mu, sigma) -> R.normal mu sigma
@@ -71,8 +74,28 @@ let rec prior: type a'. a' Dist.t -> (a' * prob) Dist.t = function
      let* x = d in
      return (x, 1.0)
 
-(* let rec mh: type a'. a' Dist.t -> a' list Dist.t = fun d ->
- *   let proposal = prior d in *)
+let mh: type a'. int -> a' Dist.t -> a' list Dist.t = fun num_iter d ->
+  let proposal = prior d in
+  let rec iterate: int -> (a' * prob) list Dist.t -> (a' * prob) list Dist.t = fun i dist ->
+    if i = 0 then dist
+    else
+      let next_dist =
+        let* (prop, prob_prop) = proposal in
+        let* current_samples = dist in
+        let (current, current_prob) = Base.List.hd_exn current_samples in
+        let accept_prob = Float.min 1.0 (prob_prop /. current_prob) in
+        let* accept = Primitive(Bernoulli(accept_prob)) in
+        let next = if accept then (prop, prob_prop) else (current, current_prob) in
+        return (next :: current_samples)
+      in
+      iterate (i - 1) next_dist
+  in
+  let init_dist =
+    let+ prop = proposal in
+    [prop]
+  in
+  let+ samples = iterate num_iter init_dist in
+  List.map fst samples
 
 let plot_hist ?(bin=10) fname x =
   let open Owl_plplot in
