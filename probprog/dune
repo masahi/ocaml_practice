@@ -1,0 +1,3 @@
+(executable
+ (name prob_monad)
+ (libraries owl))
