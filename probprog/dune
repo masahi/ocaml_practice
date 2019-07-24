@@ -1,8 +1,3 @@
 (executables
  (names dist_test linreg)
- (libraries owl base owl-plplot))
-
-(env
- (dev
-  (flags (:standard -warn-error -a)))
-)
+ (libraries owl base owl-plplot core_bench))

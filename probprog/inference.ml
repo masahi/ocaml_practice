@@ -63,14 +63,20 @@ let prior_tailcall: type a. a Dist.t -> (a * prob) Dist.t = fun d ->
 let mh: type a. int -> a Dist.t -> a list Dist.t = fun num_iter d ->
   let proposal = prior_tailcall d in
   let open Dist.Let_Syntax in
+  let rec get_valid_proposal prop_dist =
+    let* (prop, prob) = prop_dist in
+    if prob > 0.000001 then return (prop, prob)
+    else get_valid_proposal prop_dist
+  in
   let rec iterate: int -> (a * prob) list Dist.t -> (a * prob) list Dist.t = fun i dist ->
     if i = 0 then dist
     else
       let next_dist =
-        let* (prop, prob_prop) = proposal in
+        let* (prop, prob_prop) = get_valid_proposal proposal in
         let* current_samples = dist in
         let (current, current_prob) = Base.List.hd_exn current_samples in
         let accept_prob = Float.min 1.0 (prob_prop /. current_prob) in
+        (* Printf.printf "prob_prop %.20f, current_prob %.20f, accept prob: %.20f\n" prob_prop current_prob accept_prob; *)
         let* accept = bernoulli accept_prob in
         let next = if accept then (prop, prob_prop) else (current, current_prob) in
         return (next :: current_samples)
@@ -78,8 +84,9 @@ let mh: type a. int -> a Dist.t -> a list Dist.t = fun num_iter d ->
       iterate (i - 1) next_dist
   in
   let init_dist =
-    let+ prop = proposal in
-    [prop]
+    let+ (prop, prob) = get_valid_proposal proposal in
+    (* Printf.printf "initial prob %.20f\n" prob; *)
+    [(prop, prob)]
   in
   let+ samples = iterate num_iter init_dist in
   List.map fst samples
