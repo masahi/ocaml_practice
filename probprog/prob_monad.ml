@@ -68,12 +68,12 @@ let rec sample_dist: type a. a Dist.t -> a = function
   | Conditional(_) -> assert false
 
 let sample_dist_tailcall: type a. a Dist.t -> a = fun d ->
-  let rec helper: type b. b Dist.t -> (b -> b)
-    = fun d k = match d with
+  let rec helper: type b. b Dist.t -> (b -> a) -> a
+    = fun d k -> match d with
     | Return(x) -> k x
     | Bind(d, f) ->
-       helper[@tailcall] d (fun x ->
-           helper[@tailcall] (f x) k)
+       helper d (fun x ->
+          helper (f x) k) (* stack overflow at (f x)*)
     | Primitive(p) -> k (sample_prim p)
     | Conditional(_) -> assert false
   in
@@ -95,15 +95,14 @@ let rec prior: type a. a Dist.t -> (a * prob) Dist.t = fun d ->
 
 let prior_tailcall: type a. a Dist.t -> (a * prob) Dist.t = fun d ->
   let open Dist.Let_Syntax in
-  match d with
   let rec helper: type b. b Dist.t -> ((b * prob) Dist.t -> (a * prob) Dist.t) -> (a * prob) Dist.t
     = fun d k -> match d with
     | Conditional(likelihood, d) ->
-       helper[@tailcall] d (fun dist ->
+       helper d (fun dist ->
            let* (x, s) = dist in
            k (return (x, (s *. (likelihood x)))))
     | Bind(d, f) ->
-       helper[@tailcall] d (fun dist ->
+       helper d (fun dist ->
            let* (x, s) = dist in
            let* y = f x in
            k (return (y, s)))
@@ -210,9 +209,9 @@ let () =
 
 let () =
   let data =
-    let num = 50 in
-    let slope = -0.3 in
-    let intercept = 0.3 in
+    let num = 10 in
+    let slope = 1.3 in
+    let intercept = 0.2 in
     let xs = List.init num (fun i -> float_of_int i) in
     let ys_true = List.map (fun x -> x *. slope +. intercept) xs in
     let ys_obs = List.map (fun y -> y +. (R.normal 0.0 1.0) *. 1.0) ys_true in
@@ -242,8 +241,7 @@ let () =
     Base.List.zip_exn xs ys_obs in
   let conditional = List.fold_left (fun dist point -> observe point dist) linear points in
   let dist = mh 100000 conditional in
-  Printf.printf "mh sampling done\n";
-  let samples = sample_dist dist in
+  let samples = sample_dist_tailcall dist in
   let open Base in
   List.iter (List.take samples 10) ~f:(fun (slope, intercept) -> Stdlib.Printf.printf "slope %f, intercept %f\n" slope intercept);
   let (slope, intercept) = List.hd_exn samples in
