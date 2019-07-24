@@ -65,7 +65,7 @@ let mh: type a. int -> a Dist.t -> a list Dist.t = fun num_iter d ->
   let open Dist.Let_Syntax in
   let rec get_valid_proposal prop_dist =
     let* (prop, prob) = prop_dist in
-    if prob > 0.000001 then return (prop, prob)
+    if prob > 0.0000001 then return (prop, prob)
     else get_valid_proposal prop_dist
   in
   let rec iterate: int -> (a * prob) list Dist.t -> (a * prob) list Dist.t = fun i dist ->
@@ -76,8 +76,11 @@ let mh: type a. int -> a Dist.t -> a list Dist.t = fun num_iter d ->
         let* current_samples = dist in
         let (current, current_prob) = Base.List.hd_exn current_samples in
         let accept_prob = Float.min 1.0 (prob_prop /. current_prob) in
-        (* Printf.printf "prob_prop %.20f, current_prob %.20f, accept prob: %.20f\n" prob_prop current_prob accept_prob; *)
         let* accept = bernoulli accept_prob in
+        (* if accept then
+         *   Printf.printf "Accepted, prob_prop %.20f, current_prob %.20f, accept prob: %.20f\n" prob_prop current_prob accept_prob
+         * else
+         *   Printf.printf "Rejected, prob_prop %.20f, current_prob %.20f, accept prob: %.20f\n" prob_prop current_prob accept_prob; *)
         let next = if accept then (prop, prob_prop) else (current, current_prob) in
         return (next :: current_samples)
       in
