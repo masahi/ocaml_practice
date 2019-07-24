@@ -2,7 +2,7 @@ module Dist = struct
   type prob = float
 
   type _ primitive =
-    | Gaussian : float * float -> float primitive
+    | Normal : float * float -> float primitive
     | Bernoulli : float -> bool primitive
     | UniformD : 'a list -> 'a primitive
     | Categorical: ('a * prob) list -> 'a primitive
@@ -12,6 +12,19 @@ module Dist = struct
     | Bind: 'b t * ('b -> 'a t) -> 'a t
     | Primitive : 'a primitive -> 'a t
     | Conditional : ('a -> prob) * 'a t -> 'a t
+
+  let bind d f = Bind(d, f)
+  let return x = Return(x)
+  let map d f = Bind(d, (fun x -> return (f x)))
+  let normal mu sigma = Primitive(Normal(mu, sigma))
+  let std_normal () = normal 0.0 1.0
+  let bernoulli p = Primitive(Bernoulli(p))
+  let categorical weighted_choices = Primitive(Categorical(weighted_choices))
+
+  module Let_Syntax = struct
+    let (let*) d f = bind d f
+    let (let+) d f = map d f
+  end
 end
 
 module RandomSampling = struct
@@ -40,16 +53,8 @@ end
 open Dist
 module R = RandomSampling
 
-let bind d f = Bind(d, f)
-let (let*) d f = bind d f
-let return x = Return(x)
-let map d f =
-  let* x = d in
-  return (f x)
-let (let+) d f = map d f
-
 let sample_prim: type a. a Dist.primitive -> a = function
-  | Gaussian(mu, sigma) -> R.normal mu sigma
+  | Normal(mu, sigma) -> R.normal mu sigma
   | Bernoulli(p) -> R.bernoulli p
   | UniformD(choices) -> R.uniform_discrete choices
   | Categorical(weighted_choices) -> R.categorical weighted_choices
@@ -62,18 +67,21 @@ let rec sample_dist: type a. a Dist.t -> a = function
   | Primitive(p) -> sample_prim p
   | Conditional(_) -> assert false
 
-(* let sample_dist_tailcall d =
- *   let rec helper d k = match d with
- *     | Return(x) -> k x
- *     | Bind(d, f) ->
- *        helper d (fun x ->
- *            sample_dist (f x))
- *     | Primitive(p) -> k (sample_prim p)
- *     | Conditional(_) -> assert false
- *   in
- *   helper d (fun x -> x) *)
+let sample_dist_tailcall: type a. a Dist.t -> a = fun d ->
+  let rec helper: type b. b Dist.t -> (b -> b)
+    = fun d k = match d with
+    | Return(x) -> k x
+    | Bind(d, f) ->
+       helper[@tailcall] d (fun x ->
+           helper[@tailcall] (f x) k)
+    | Primitive(p) -> k (sample_prim p)
+    | Conditional(_) -> assert false
+  in
+  helper d (fun x -> x)
 
-let rec prior: type a. a Dist.t -> (a * prob) Dist.t = function
+let rec prior: type a. a Dist.t -> (a * prob) Dist.t = fun d ->
+  let open Dist.Let_Syntax in
+  match d with
   | Conditional(likelihood, d) ->
      let* (x, s) = prior d in
      return (x, s *. (likelihood x))
@@ -86,14 +94,16 @@ let rec prior: type a. a Dist.t -> (a * prob) Dist.t = function
      return (x, 1.0)
 
 let prior_tailcall: type a. a Dist.t -> (a * prob) Dist.t = fun d ->
+  let open Dist.Let_Syntax in
+  match d with
   let rec helper: type b. b Dist.t -> ((b * prob) Dist.t -> (a * prob) Dist.t) -> (a * prob) Dist.t
     = fun d k -> match d with
     | Conditional(likelihood, d) ->
-       helper d (fun dist ->
+       helper[@tailcall] d (fun dist ->
            let* (x, s) = dist in
            k (return (x, (s *. (likelihood x)))))
     | Bind(d, f) ->
-       helper d (fun dist ->
+       helper[@tailcall] d (fun dist ->
            let* (x, s) = dist in
            let* y = f x in
            k (return (y, s)))
@@ -105,6 +115,7 @@ let prior_tailcall: type a. a Dist.t -> (a * prob) Dist.t = fun d ->
 
 let mh: type a. int -> a Dist.t -> a list Dist.t = fun num_iter d ->
   let proposal = prior_tailcall d in
+  let open Dist.Let_Syntax in
   let rec iterate: int -> (a * prob) list Dist.t -> (a * prob) list Dist.t = fun i dist ->
     if i = 0 then dist
     else
@@ -113,7 +124,7 @@ let mh: type a. int -> a Dist.t -> a list Dist.t = fun num_iter d ->
         let* current_samples = dist in
         let (current, current_prob) = Base.List.hd_exn current_samples in
         let accept_prob = Float.min 1.0 (prob_prop /. current_prob) in
-        let* accept = Primitive(Bernoulli(accept_prob)) in
+        let* accept = bernoulli accept_prob in
         let next = if accept then (prop, prob_prop) else (current, current_prob) in
         return (next :: current_samples)
       in
@@ -132,11 +143,13 @@ let plot_hist ?(bin=10) fname x =
   Plot.histogram ~h ~bin x;
   Plot.output h
 
+open Dist.Let_Syntax
+
 let () =
   let rv =
-    let* x = Primitive(Gaussian(0.0, 1.0)) in
-    let* y = Primitive(Gaussian(0.0, 1.0)) in
-    let* b = Primitive(Bernoulli(0.5)) in
+    let* x = std_normal () in
+    let* y = std_normal () in
+    let* b = bernoulli 0.5 in
     if b then return (x +. y)
     else return (x -. y)
   in
@@ -180,7 +193,7 @@ let () =
 
 
 let () =
-  let normal = Primitive(Gaussian(0.0, 1.0)) in
+  let normal = Primitive(Normal(0.0, 1.0)) in
   let chi2 k =
     sample_sum normal k 0.0 (+.) (fun x -> x *. x)
   in
@@ -214,7 +227,7 @@ let () =
   let h = Plot.create "linreg.png" in
   Plot.plot ~h (list_to_mat xs) (list_to_mat ys_obs);
   Plot.output h;
-  let normal = Primitive(Gaussian(0.0, 1.0)) in
+  let normal = Primitive(Normal(0.0, 1.0)) in
   let linear =
     let* a = normal in
     let* b = normal in
