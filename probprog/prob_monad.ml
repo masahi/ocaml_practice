@@ -48,13 +48,13 @@ let map d f =
   return (f x)
 let (let+) d f = map d f
 
-let sample_prim: type a'. a' Dist.primitive -> a' = function
+let sample_prim: type a. a Dist.primitive -> a = function
   | Gaussian(mu, sigma) -> R.normal mu sigma
   | Bernoulli(p) -> R.bernoulli p
   | UniformD(choices) -> R.uniform_discrete choices
   | Categorical(weighted_choices) -> R.categorical weighted_choices
 
-let rec sample_dist: type a'. a' Dist.t -> a' = function
+let rec sample_dist: type a. a Dist.t -> a = function
   | Return(x) -> x
   | Bind(d, f) ->
      let x = sample_dist d in
@@ -62,7 +62,18 @@ let rec sample_dist: type a'. a' Dist.t -> a' = function
   | Primitive(p) -> sample_prim p
   | Conditional(_) -> assert false
 
-let rec prior: type a'. a' Dist.t -> (a' * prob) Dist.t = function
+(* let sample_dist_tailcall d =
+ *   let rec helper d k = match d with
+ *     | Return(x) -> k x
+ *     | Bind(d, f) ->
+ *        helper d (fun x ->
+ *            sample_dist (f x))
+ *     | Primitive(p) -> k (sample_prim p)
+ *     | Conditional(_) -> assert false
+ *   in
+ *   helper d (fun x -> x) *)
+
+let rec prior: type a. a Dist.t -> (a * prob) Dist.t = function
   | Conditional(likelihood, d) ->
      let* (x, s) = prior d in
      return (x, s *. (likelihood x))
@@ -74,9 +85,27 @@ let rec prior: type a'. a' Dist.t -> (a' * prob) Dist.t = function
      let* x = d in
      return (x, 1.0)
 
-let mh: type a'. int -> a' Dist.t -> a' list Dist.t = fun num_iter d ->
-  let proposal = prior d in
-  let rec iterate: int -> (a' * prob) list Dist.t -> (a' * prob) list Dist.t = fun i dist ->
+let prior_tailcall: type a. a Dist.t -> (a * prob) Dist.t = fun d ->
+  let rec helper: type b. b Dist.t -> ((b * prob) Dist.t -> (a * prob) Dist.t) -> (a * prob) Dist.t
+    = fun d k -> match d with
+    | Conditional(likelihood, d) ->
+       helper d (fun dist ->
+           let* (x, s) = dist in
+           k (return (x, (s *. (likelihood x)))))
+    | Bind(d, f) ->
+       helper d (fun dist ->
+           let* (x, s) = dist in
+           let* y = f x in
+           k (return (y, s)))
+    | _ as d ->
+       let* x = d in
+       k (return (x, 1.0))
+  in
+  helper d (fun dist -> dist)
+
+let mh: type a. int -> a Dist.t -> a list Dist.t = fun num_iter d ->
+  let proposal = prior_tailcall d in
+  let rec iterate: int -> (a * prob) list Dist.t -> (a * prob) list Dist.t = fun i dist ->
     if i = 0 then dist
     else
       let next_dist =
@@ -199,7 +228,9 @@ let () =
   let points =
     Base.List.zip_exn xs ys_obs in
   let conditional = List.fold_left (fun dist point -> observe point dist) linear points in
-  let samples = sample_dist (mh 100000 conditional) in
+  let dist = mh 100000 conditional in
+  Printf.printf "mh sampling done\n";
+  let samples = sample_dist dist in
   let open Base in
   List.iter (List.take samples 10) ~f:(fun (slope, intercept) -> Stdlib.Printf.printf "slope %f, intercept %f\n" slope intercept);
   let (slope, intercept) = List.hd_exn samples in
