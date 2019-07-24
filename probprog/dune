@@ -1,3 +1,8 @@
-(executable
- (name prob_monad)
- (libraries owl))
+(executables
+ (names dist_test linreg)
+ (libraries owl base owl-plplot))
+
+(env
+ (dev
+  (flags (:standard -warn-error -a)))
+)
