@@ -168,12 +168,12 @@ let () =
 
 let () =
   let data =
-    let num = 100 in
-    let slope = 2.0 in
-    let intercept = 5.0 in
+    let num = 50 in
+    let slope = -0.3 in
+    let intercept = 0.3 in
     let xs = List.init num (fun i -> float_of_int i) in
     let ys_true = List.map (fun x -> x *. slope +. intercept) xs in
-    let ys_obs = List.map (fun y -> y +. (R.normal 0.0 5.0) *. 5.0) ys_true in
+    let ys_obs = List.map (fun y -> y +. (R.normal 0.0 1.0) *. 1.0) ys_true in
     (xs, ys_obs)
   in
   let list_to_mat lst =
@@ -193,15 +193,16 @@ let () =
   in
   let observe (x, y) prior =
     let likelihood (a, b) =
-      let l = Owl_stats.gaussian_pdf y ~mu:(a *. x +. b) ~sigma:1.0 in
-      Printf.printf "(x, y): (%f, %f), (a, b): (%f,%f), mu: %f, l:%.20f \n" x y a b (a *. x +. b) l;
-      l
+      Owl_stats.gaussian_pdf y ~mu:(a *. x +. b) ~sigma:1.0
     in
     Conditional(likelihood, prior) in
   let points =
     Base.List.zip_exn xs ys_obs in
   let conditional = List.fold_left (fun dist point -> observe point dist) linear points in
-  let proposal = prior conditional in
-  let samples = List.init 1000 (fun _ -> sample_dist proposal) in
-  let sorted = Base.List.sort samples ~compare:(fun (_, p1) (_, p2) -> Bool.to_int (p1 > p2)) in
-  List.iter (fun ((slope, intercept), p) -> Printf.printf "slope %f, intercept %f, prob %.20f\n" slope intercept p) sorted
+  let samples = sample_dist (mh 100000 conditional) in
+  let open Base in
+  List.iter (List.take samples 10) ~f:(fun (slope, intercept) -> Stdlib.Printf.printf "slope %f, intercept %f\n" slope intercept);
+  let (slope, intercept) = List.hd_exn samples in
+  List.iter points ~f:(fun (x, y) ->
+      let pdf = Owl_stats.gaussian_pdf y ~mu:(slope *. x +. intercept) ~sigma:1.0 in
+      Stdlib.Printf.printf "(x, y): (%f, %f), pdf:%.20f\n" x y pdf)
