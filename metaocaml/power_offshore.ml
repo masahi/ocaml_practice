@@ -24,10 +24,24 @@ let string_of_typ = function
   | TVariable -> "var"
   | _ -> "unknown"
 
+let pprint_vname vname = (vname : varname :> string)
+
+let rec pprint_exp = function
+  | Const (Const_int x) -> string_of_int x
+  | KnownVar x
+  | LocalVar (x,_) -> pprint_vname x
+  | Let({id; ty; bind; body; _}) ->
+    let rhs = pprint_exp bind in
+    let body = pprint_exp body in
+    Printf.sprintf "let %s:%s = %s in \n %s" (pprint_vname id) (string_of_typ ty) rhs body
+  | FunCall  (name,args) -> "app(name, args)"
+  | _ ->  failwith "not yet implemented"
+
 let pprint_fun args typ exp =
   print_string "Fun(";
-  List.iter (fun (vname, ty) -> Printf.printf "%s: %s," (vname : varname :> string) (string_of_typ ty)) args;
-  print_string ")\n"
+  List.iter (fun (vname, ty) -> Printf.printf "%s: %s" (pprint_vname vname) (string_of_typ ty)) args;
+  let body = pprint_exp exp in
+  Printf.printf "){\n %s\n}\n" body
 
 let pprint_proc args cmd =
   Printf.printf "Proc\n"
