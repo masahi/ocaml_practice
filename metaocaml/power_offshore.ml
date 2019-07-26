@@ -16,11 +16,33 @@ let rec spower n x =
 
 let spowern n = .<fun x -> .~(spower n .<x>.)>.
 
+let string_of_typ = function
+  | TUnit -> "unit"
+  | TInt -> "int"
+  | TBool -> "bool"
+  | TDouble -> "float"
+  | TVariable -> "var"
+  | _ -> "unknown"
+
+let pprint_fun args typ exp =
+  print_string "Fun(";
+  List.iter (fun (vname, ty) -> Printf.printf "%s: %s," (vname : varname :> string) (string_of_typ ty)) args;
+  print_string ")\n"
+
+let pprint_proc args cmd =
+  Printf.printf "Proc\n"
+
 let pprint_offshore_ir = function
- | Fun(_) -> Printf.printf "%s\n" "Fun(args, typ, exp)"
- | Proc(_) -> Printf.printf "%s\n" "Prof(args, cmd)"
+ | Fun(args, typ, exp) -> pprint_fun args typ exp
+ | Proc(args, cmd) -> pprint_proc args cmd
 
 let _ =
+  let llcontext = Llvm.global_context () in
+  let llmodule = Llvm.create_module llcontext "power jit" in
+  ignore(Llvm_executionengine.initialize ());
+  let ee = Llvm_executionengine.create llmodule in
+  let fpm = Llvm.PassManager.create_function llmodule in
+  Llvm_scalar_opts.add_memory_to_register_promotion fpm ;
   let go n _ =
     let power_staged = spowern n in
     let proc = offshore (module DefaultConv) power_staged in

@@ -2,4 +2,16 @@
  (names power_bench power_offshore)
  (ocamlopt_flags (:standard -I +compiler-libs ocamlcommon.cmxa dynlink.cmxa codelib.cmx runnative.cmx))
  (ocamlc_flags (:standard -I +compiler-libs ocamlcommon.cma ocamlbytecomp.cma ocamltoplevel.cma metalib.cma berstart.cmo))
- (libraries core_bench))
+ (libraries
+   ; core_bench
+   llvm
+   llvm.analysis
+   llvm.executionengine
+   llvm.target
+   llvm.scalar_opts
+))
+
+(env
+ (dev
+  (flags (:standard -warn-error -a)))
+)
