@@ -27,14 +27,15 @@ let string_of_typ = function
 let pprint_vname vname = (vname : varname :> string)
 
 let rec pprint_exp = function
-  | Const (Const_int x) -> string_of_int x
-  | KnownVar x
+  | Const (Const_float x) -> x
   | LocalVar (x,_) -> pprint_vname x
   | Let({id; ty; bind; body; _}) ->
     let rhs = pprint_exp bind in
     let body = pprint_exp body in
     Printf.sprintf "let %s:%s = %s in \n %s" (pprint_vname id) (string_of_typ ty) rhs body
-  | FunCall  (name,args) -> "app(name, args)"
+  | FunCall (name,args) ->
+    let args_str = List.map pprint_exp args in
+    Printf.sprintf "app(%s, %s)" (pprint_vname name) (String.concat ", " args_str)
   | _ ->  failwith "not yet implemented"
 
 let pprint_fun args typ exp =
