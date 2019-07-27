@@ -3,7 +3,8 @@
  (ocamlopt_flags (:standard -I +compiler-libs ocamlcommon.cmxa dynlink.cmxa codelib.cmx runnative.cmx))
  (ocamlc_flags (:standard -I +compiler-libs ocamlcommon.cma ocamlbytecomp.cma ocamltoplevel.cma metalib.cma berstart.cmo))
  (libraries
-   ; core_bench
+   core_bench
+   base
    llvm
    llvm.analysis
    llvm.executionengine
