@@ -78,7 +78,7 @@ let mh: type a. int -> a Dist.t -> a list Dist.t = fun num_iter d ->
         let (current, current_prob) = Base.List.hd_exn current_samples in
         if prob_prop < eps then return ((current, current_prob) :: current_samples)
         else
-          let accept_prob = Float.min 1.0 (prob_prop /. current_prob) in
+          let accept_prob = min 1.0 (prob_prop /. current_prob) in
           let* accept = bernoulli accept_prob in
         (* if accept then
          *   Printf.printf "Accepted, prob_prop %.20f, current_prob %.20f, accept prob: %.20f\n" prob_prop current_prob accept_prob

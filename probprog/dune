@@ -1,3 +1,4 @@
 (executables
  (names dist_test linreg)
+ (preprocess future_syntax)
  (libraries owl base owl-plplot core_bench))
