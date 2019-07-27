@@ -11,8 +11,3 @@
    llvm.target
    llvm.scalar_opts
 ))
-
-(env
- (dev
-  (flags (:standard -warn-error -a)))
-)
