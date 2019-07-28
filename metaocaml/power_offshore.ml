@@ -112,6 +112,18 @@ module LLVM_gen = struct
     Llvm_executionengine.get_function_address func_name
       (Foreign.funptr Ctypes.(double @-> returning double))
       ee
+
+  let emit_asm file =
+    Llvm_X86.initialize ();
+    let tgt =
+      match Llvm_target.Target.by_name "x86-64" with
+      | Some(t) -> t
+      | None -> failwith "target not found"
+    in
+    let triple = Llvm_target.Target.default_triple () in
+    let machine = Llvm_target.TargetMachine.create tgt ~triple:triple in
+    Llvm_target.TargetMachine.emit_to_file llmodule Llvm_target.CodeGenFileType.AssemblyFile file machine
+
 end
 
 let rec spower n x =
@@ -124,18 +136,6 @@ let rec spower n x =
 let spowern n = .<fun x -> .~(spower n .<x>.)>.
 
 let _ =
-  Llvm_X86.initialize ();
-  let target_list = Llvm_target.Target.all () in
-  Printf.printf "num target %d\n" (List.length target_list);
-  List.iter (fun target -> Printf.printf "%s\n" (Llvm_target.Target.name target)) target_list;
-  let tgt =
-    match Llvm_target.Target.by_name "x86-64" with
-    | Some(t) -> t
-    | None -> failwith "target not found"
-  in
-  let triple = Llvm_target.Target.default_triple () in
-  let machine = Llvm_target.TargetMachine.create tgt ~triple:triple in
-  Printf.printf "triple: %s\n" (Llvm_target.TargetMachine.triple machine);
   let go n x =
     let power_staged = spowern n in
     let func = offshore (module DefaultConv) power_staged in
@@ -143,10 +143,10 @@ let _ =
     let llval = LLVM_gen.get func in
     Llvm.dump_value llval;
     let fp = LLVM_gen.get_function_pointer () in
-    Printf.printf "jit: power(%d, %f) = %.20f\n" n x (fp x)
+    Printf.printf "jit: power(%d, %f) = %.20f\n" n x (fp x);
+    let fname = Printf.sprintf "power_%d.s" n in
+    LLVM_gen.emit_asm fname
     (* let open Core_bench in
      * [Bench.Test.create ~name:"llvm jit" (fun () -> ignore(fp x))] |> Bench.bench; (\* why so slow?  *\) *)
   in
   go 100000 1.00001;
-  let llmodule = LLVM_gen.llmodule in
-  Llvm_target.TargetMachine.emit_to_file llmodule Llvm_target.CodeGenFileType.AssemblyFile "power.s" machine;
