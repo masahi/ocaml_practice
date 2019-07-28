@@ -10,4 +10,5 @@
    llvm.executionengine
    llvm.target
    llvm.scalar_opts
+   llvm_X86
 ))
