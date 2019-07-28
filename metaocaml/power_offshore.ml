@@ -115,14 +115,15 @@ module LLVM_gen = struct
 
   let emit_asm file =
     Llvm_X86.initialize ();
+    let open Llvm_target in
     let tgt =
-      match Llvm_target.Target.by_name "x86-64" with
+      match Target.by_name "x86-64" with
       | Some(t) -> t
       | None -> failwith "target not found"
     in
-    let triple = Llvm_target.Target.default_triple () in
-    let machine = Llvm_target.TargetMachine.create tgt ~triple:triple in
-    Llvm_target.TargetMachine.emit_to_file llmodule Llvm_target.CodeGenFileType.AssemblyFile file machine
+    let triple = Target.default_triple () in
+    let machine = TargetMachine.create tgt ~triple:triple in
+    TargetMachine.emit_to_file llmodule CodeGenFileType.AssemblyFile file machine
 
 end
 
