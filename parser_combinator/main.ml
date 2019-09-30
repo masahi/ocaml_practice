@@ -9,13 +9,13 @@ module Parser = struct
   type 'a t = string -> ((string * 'a), string) Caml.result
 
   module Let_Syntax = struct
-    let (let*) parser f =
+    let (let*) (parser:'a t) (f: 'a -> 'b t) =
       fun input -> match parser input with
         | Ok(next_input, result) ->
           let next_parser = f result in
           next_parser next_input
         | Error(input) -> Error(input)
-    let (let+) parser f =
+    let (let+) (parser:'a t) (f: 'a -> 'b) =
       fun input -> match parser input with
         | Ok(next_input, result) -> Ok(next_input, f result)
         | Error(input) -> Error(input)
@@ -45,25 +45,41 @@ module Parser = struct
     let+ result2 = parser2 in
     (result1, result2)
 
-end
+  let left parser1 parser2 =
+    let open Let_Syntax in
+    let+ (result1, _) = pair parser1 parser2 in
+    result1
 
+  let right parser1 parser2 =
+    let open Let_Syntax in
+    let+ (_, result2) = pair parser1 parser2 in
+    result2
+
+end
 
 let _ =
   let open Parser in
   let parse_joe = match_literal "Hello Joe!" in
   assert (Ok("", ()) = parse_joe "Hello Joe!");
-  assert (Ok(" Hello Robert!", ()) = parse_joe("Hello Joe! Hello Robert!"));
-  assert (Error("Hello Mike!") = parse_joe("Hello Mike!"))
+  assert (Ok(" Hello Robert!", ()) = parse_joe "Hello Joe! Hello Robert!" );
+  assert (Error("Hello Mike!") = parse_joe "Hello Mike!")
 
 let _ =
   let open Parser in
-  assert (Ok("", "i-am-an-identifier") = identifier("i-am-an-identifier"));
-  assert (Ok(" entirely an identifier", "not") = identifier("not entirely an identifier"));
-  assert (Error("!not at all an identifier") = identifier("!not at all an identifier"))
+  assert (Ok("", "i-am-an-identifier") = identifier "i-am-an-identifier");
+  assert (Ok(" entirely an identifier", "not") = identifier "not entirely an identifier");
+  assert (Error("!not at all an identifier") = identifier "!not at all an identifier")
 
 let _ =
   let open Parser in
   let tag_opener = pair (match_literal "<") identifier in
-  assert (Ok("/>", ((), "my-first-element")) = tag_opener("<my-first-element/>"));
+  assert (Ok("/>", ((), "my-first-element")) = tag_opener "<my-first-element/>");
   assert (Error("oops") = tag_opener("oops"));
   assert (Error("!oops") = tag_opener("<!oops"))
+
+let _ =
+  let open Parser in
+  let tag_opener = right (match_literal "<") identifier in
+  assert (Ok("/>", "my-first-element") = tag_opener "<my-first-element/>");
+  assert (Error("oops") = tag_opener "oops");
+  assert (Error("!oops") = tag_opener "<!oops")
