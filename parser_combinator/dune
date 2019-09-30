@@ -1,4 +1,5 @@
 (executable
  (name main)
+ (preprocess future_syntax)
  (libraries base)
 )
