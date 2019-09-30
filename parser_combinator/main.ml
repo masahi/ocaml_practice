@@ -1,14 +1,16 @@
-let sub_str str start =
-  let len = String.length str in
-  String.sub str start (len - start)
+module Parser = struct
+  open Base
 
-let match_literal expected =
-  let len = String.length expected in
-  fun input ->
-    if expected = String.sub input 0 len then Ok(sub_str input len, ())
-    else Error(input)
+  let match_literal expected =
+    let len = String.length expected in
+    fun input ->
+      if String.equal expected (String.sub input ~pos:0 ~len) then Ok(String.subo input ~pos:len, ())
+      else Error(input)
+end
+
 
 let _ =
+  let open Parser in
   let parse_joe = match_literal "Hello Joe!" in
   assert (Ok("", ()) = parse_joe "Hello Joe!");
   assert (Ok(" Hello Robert!", ()) = parse_joe("Hello Joe! Hello Robert!"));
