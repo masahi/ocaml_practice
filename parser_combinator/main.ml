@@ -6,6 +6,21 @@ let string_of_chars chars =
 module Parser = struct
   open Base
 
+  type 'a t = string -> ((string * 'a), string) Caml.result
+
+  module Let_Syntax = struct
+    let (let*) parser f =
+      fun input -> match parser input with
+        | Ok(next_input, result) ->
+          let next_parser = f result in
+          next_parser next_input
+        | Error(input) -> Error(input)
+    let (let+) parser f =
+      fun input -> match parser input with
+        | Ok(next_input, result) -> Ok(next_input, f result)
+        | Error(input) -> Error(input)
+  end
+
   let match_literal expected =
     let len = String.length expected in
     fun input ->
@@ -24,6 +39,12 @@ module Parser = struct
         Ok(String.subo input ~pos:(List.length consumed), string_of_chars consumed)
       else Error(input)
 
+  let pair parser1 parser2 =
+    let open Let_Syntax in
+    let* result1 = parser1 in
+    let+ result2 = parser2 in
+    (result1, result2)
+
 end
 
 
@@ -39,3 +60,10 @@ let _ =
   assert (Ok("", "i-am-an-identifier") = identifier("i-am-an-identifier"));
   assert (Ok(" entirely an identifier", "not") = identifier("not entirely an identifier"));
   assert (Error("!not at all an identifier") = identifier("!not at all an identifier"))
+
+let _ =
+  let open Parser in
+  let tag_opener = pair (match_literal "<") identifier in
+  assert (Ok("/>", ((), "my-first-element")) = tag_opener("<my-first-element/>"));
+  assert (Error("oops") = tag_opener("oops"));
+  assert (Error("!oops") = tag_opener("<!oops"))
