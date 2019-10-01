@@ -1,3 +1,5 @@
+(* Ported from rust version in https://bodil.lol/parser-combinators/ *)
+
 let string_of_chars chars =
   let buf = Buffer.create 16 in
   List.iter (Buffer.add_char buf) chars;
@@ -24,8 +26,8 @@ module Parser = struct
   let match_literal expected =
     let len = String.length expected in
     fun input ->
-      if String.equal expected (String.sub input ~pos:0 ~len) then Ok(String.subo input ~pos:len, ())
-      else Error(input)
+     if (String.length input) >= len && String.equal expected (String.sub input ~pos:0 ~len) then Ok(String.subo input ~pos:len, ())
+     else Error(input)
 
   let identifier input =
     let char_list = String.to_list input in
@@ -55,6 +57,24 @@ module Parser = struct
     let+ (_, result2) = pair parser1 parser2 in
     result2
 
+  let zero_or_more parser =
+    let rec consume input = match parser input with
+      | Ok(next_input, first_item) ->
+        let (next_input, items) = consume next_input in
+        next_input, (first_item :: items)
+      | _ -> input, []
+    in
+    fun input -> Ok(consume input)
+
+  let one_or_more parser =
+    fun input ->
+      match parser input with
+      | Ok(next_input, first_item) ->
+        begin match (zero_or_more parser) next_input with
+        | Ok(next_input, items) -> Ok(next_input, first_item :: items)
+        | _ -> Ok(next_input, [first_item])
+        end
+      | _ -> Error(input)
 end
 
 let _ =
@@ -83,3 +103,17 @@ let _ =
   assert (Ok("/>", "my-first-element") = tag_opener "<my-first-element/>");
   assert (Error("oops") = tag_opener "oops");
   assert (Error("!oops") = tag_opener "<!oops")
+
+let _ =
+  let open Parser in
+  let parser = zero_or_more (match_literal "ha") in
+  assert (Ok("", [(); (); ()]) = parser "hahaha");
+  assert (Ok("ahah", []) = parser "ahah");
+  assert (Ok("", []) = parser "")
+
+let _ =
+  let open Parser in
+  let parser = one_or_more (match_literal "ha") in
+  assert (Ok("", [(); (); ()]) = parser "hahaha");
+  assert (Error("ahah") = parser "ahah");
+  assert (Error("") = parser "")
