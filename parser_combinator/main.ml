@@ -32,8 +32,8 @@ module Parser = struct
   let match_literal expected =
     let len = String.length expected in
     fun input ->
-     if (String.length input) >= len && String.equal expected (String.sub input ~pos:0 ~len) then Ok(String.subo input ~pos:len, ())
-     else Error(input)
+      if (String.length input) >= len && String.equal expected (String.sub input ~pos:0 ~len) then Ok(String.subo input ~pos:len, ())
+      else Error(input)
 
   let identifier input =
     let char_list = String.to_list input in
@@ -98,10 +98,13 @@ module Parser = struct
 
   let quoted_string () =
     let open Let_Syntax in
+    let is_not_quote = (fun c -> not (Char.equal c '"')) in
     let+ chars =
-      right (match_literal "\"") (left
-                                    (zero_or_more (pred any_char (fun c -> not (Char.equal c '"'))))
-                                    (match_literal "\""))
+      right
+        (match_literal "\"")
+        (left
+           (zero_or_more (pred any_char is_not_quote))
+           (match_literal "\""))
     in
     string_of_chars chars
 
@@ -122,6 +125,40 @@ module Parser = struct
       attributes;
       children = []
     }
+
+  let open_element () =
+    let open Let_Syntax in
+    let+ (name, attributes) = left (element_start ()) (match_literal ">") in
+    {
+      name;
+      attributes;
+      children = []
+    }
+
+  let either parser1 parser2 =
+    fun input -> match parser1 input with
+      | Ok(_) as ok -> ok
+      | Error(_) -> parser2 input
+
+  let close_element expected_tag =
+    let parser = right (match_literal "</") (left identifier (match_literal ">")) in
+    pred parser (fun name -> String.equal name expected_tag)
+
+  let rec element () =
+    either (single_element ()) (parent_element ())
+
+  and parent_element () =
+    let open Let_Syntax in
+
+    let* {name; attributes; _} = open_element () in
+    Caml.Printf.printf "open name %s\n" name;
+    let+ children = left (zero_or_more (element ())) (close_element name) in
+    {
+      name;
+      attributes;
+      children
+    }
+
 end
 
 let _ =
@@ -189,3 +226,43 @@ let _ =
     }
   in
   assert (Ok("", element) = (single_element ()) "<div class=\"float\"/>")
+
+let _ =
+  let open Parser in
+  let doc = {|
+        <top label="Top">
+            <semi-bottom label="Bottom"/>
+            <middle>
+                <bottom label="Another bottom"/>
+            </middle>
+        </top>|}
+  in
+  let parsed_doc =
+    {
+      name = "top";
+      attributes = [("label", "Top")];
+      children = [
+                  {   name= "semi-bottom";
+                      attributes= [("label", "Bottom")];
+                      children= []
+                  };
+                  {
+                    name= "middle";
+                    attributes= [];
+                    children= [
+                      {
+                        name= "bottom";
+                        attributes= [("label", "Another bottom")];
+                        children= []
+                      }
+                    ]
+                  }
+                 ]
+    }
+  in
+  let parse_result = (element ()) doc in
+  begin match parse_result with
+  | Ok(_) -> Caml.Printf.printf "parse ok\n";
+  | Error(input) -> Caml.Printf.printf "parse failed on input %s\n" input;
+  end;
+  assert (Ok("", parsed_doc) = parse_result);
