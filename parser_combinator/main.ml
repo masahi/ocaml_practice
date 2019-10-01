@@ -71,6 +71,25 @@ module Parser = struct
     let+ (first_item, items) = pair parser (zero_or_more parser) in
     first_item :: items
 
+  let any_char input =
+    match String.to_list input with
+    | [] -> Error(input)
+    | hd :: tl -> Ok(string_of_chars tl, hd)
+
+  let pred parser predicate =
+    fun input -> match parser input with
+      | Ok(next_input, item) when predicate item -> Ok(next_input, item)
+      | _ -> Error(input)
+
+  let whitespace_char () =
+    pred any_char (fun c -> Char.is_whitespace c)
+
+  let space0 () =
+    zero_or_more (whitespace_char ())
+
+  let space1 () =
+    one_or_more (whitespace_char ())
+
 end
 
 let _ =
@@ -113,3 +132,9 @@ let _ =
   assert (Ok("", [(); (); ()]) = parser "hahaha");
   assert (Error("ahah") = parser "ahah");
   assert (Error("") = parser "")
+
+let _ =
+  let open Parser in
+  let parser = pred any_char (fun c -> c = 'o') in
+  assert (Ok("mg", 'o') = parser "omg");
+  assert (Error("lol") = parser "lol")
