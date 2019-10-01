@@ -90,6 +90,21 @@ module Parser = struct
   let space1 () =
     one_or_more (whitespace_char ())
 
+  let quoted_string () =
+    let open Let_Syntax in
+    let+ chars =
+      right (match_literal "\"") (left
+                                    (zero_or_more (pred any_char (fun c -> not (Char.equal c '"'))))
+                                    (match_literal "\""))
+    in
+    string_of_chars chars
+
+  let attribute_pair () =
+    pair identifier (right (match_literal "=") (quoted_string ()))
+
+  let attributes () =
+    zero_or_more (right (space1 ()) (attribute_pair ()))
+
 end
 
 let _ =
@@ -138,3 +153,11 @@ let _ =
   let parser = pred any_char (fun c -> c = 'o') in
   assert (Ok("mg", 'o') = parser "omg");
   assert (Error("lol") = parser "lol")
+
+let _ =
+  let open Parser in
+  assert (Ok("", "Hello Joe!") =  (quoted_string ()) "\"Hello Joe!\"")
+
+let _ =
+  let open Parser in
+  assert (Ok("", [("one", "1"); ("two", "2")]) = (attributes ()) " one=\"1\" two=\"2\"")
