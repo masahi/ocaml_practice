@@ -144,14 +144,15 @@ module Parser = struct
     let parser = right (match_literal "</") (left identifier (match_literal ">")) in
     pred parser (fun name -> String.equal name expected_tag)
 
+  let whitespace_wrap parser =
+    right (space0 ()) (left parser (space0 ()))
+
   let rec element () =
-    either (single_element ()) (parent_element ())
+    either (single_element ()) (parent_element ()) |> whitespace_wrap
 
   and parent_element () =
     let open Let_Syntax in
-
     let* {name; attributes; _} = open_element () in
-    Caml.Printf.printf "open name %s\n" name;
     let+ children = left (zero_or_more (element ())) (close_element name) in
     {
       name;
@@ -229,13 +230,13 @@ let _ =
 
 let _ =
   let open Parser in
-  let doc = {|
-        <top label="Top">
-            <semi-bottom label="Bottom"/>
+  let doc = "
+        <top label=\"Top\">
+            <semi-bottom label=\"Bottom\"/>
             <middle>
-                <bottom label="Another bottom"/>
+                <bottom label=\"Another bottom\"/>
             </middle>
-        </top>|}
+        </top>"
   in
   let parsed_doc =
     {
@@ -260,9 +261,4 @@ let _ =
                  ]
     }
   in
-  let parse_result = (element ()) doc in
-  begin match parse_result with
-  | Ok(_) -> Caml.Printf.printf "parse ok\n";
-  | Error(input) -> Caml.Printf.printf "parse failed on input %s\n" input;
-  end;
-  assert (Ok("", parsed_doc) = parse_result);
+  assert (Ok("", parsed_doc) = (element ()) doc)
