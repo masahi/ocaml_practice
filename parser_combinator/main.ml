@@ -67,14 +67,10 @@ module Parser = struct
     fun input -> Ok(consume input)
 
   let one_or_more parser =
-    fun input ->
-      match parser input with
-      | Ok(next_input, first_item) ->
-        begin match (zero_or_more parser) next_input with
-        | Ok(next_input, items) -> Ok(next_input, first_item :: items)
-        | _ -> Ok(next_input, [first_item])
-        end
-      | _ -> Error(input)
+    let open Let_Syntax in
+    let+ (first_item, items) = pair parser (zero_or_more parser) in
+    first_item :: items
+
 end
 
 let _ =
