@@ -10,6 +10,12 @@ module Parser = struct
 
   type 'a t = string -> ((string * 'a), string) Caml.result
 
+  type element = {
+    name: string;
+    attributes: (string * string) list;
+    children: element list
+  }
+
   module Let_Syntax = struct
     let (let*) (parser:'a t) (f: 'a -> 'b t) =
       fun input -> match parser input with
@@ -105,6 +111,17 @@ module Parser = struct
   let attributes () =
     zero_or_more (right (space1 ()) (attribute_pair ()))
 
+  let element_start () =
+    right (match_literal "<") (pair identifier (attributes ()))
+
+  let single_element () =
+    let open Let_Syntax in
+    let+ (name, attributes) = left (element_start ()) (match_literal "/>") in
+    {
+      name;
+      attributes;
+      children = []
+    }
 end
 
 let _ =
@@ -161,3 +178,14 @@ let _ =
 let _ =
   let open Parser in
   assert (Ok("", [("one", "1"); ("two", "2")]) = (attributes ()) " one=\"1\" two=\"2\"")
+
+let _ =
+  let open Parser in
+  let element =
+    {
+      name = "div";
+      attributes = [("class", "float")];
+      children = []
+    }
+  in
+  assert (Ok("", element) = (single_element ()) "<div class=\"float\"/>")
