@@ -57,3 +57,7 @@ let rec eval e env =
     let env1 = ext env f (RecFunVal (f, x, e1, env))
     in eval e2 env1
   | _ -> failwith "unknown expression"
+
+let eval_top e =
+  let env = emptyenv () in
+  eval e env

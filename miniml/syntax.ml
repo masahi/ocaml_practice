@@ -1,6 +1,3 @@
-(* syntax.ml *)
-
-(* 式の型 *)
 type exp =
   | Var of string         (* variable e.g. x *)
   | IntLit of int         (* integer literal e.g. 17 *)
@@ -23,7 +20,6 @@ type exp =
   | Head of exp           (* List.hd e *)
   | Tail of exp           (* List.tl e *)
 
-(* 値の型 *)
 type value =
   | IntVal  of int        (* integer value e.g. 17 *)
   | BoolVal of bool       (* booleanvalue e.g. true *)
@@ -39,3 +35,7 @@ type value =
 and
   env = (string * value) list
 
+let print_value = function
+  | IntVal(n) -> Printf.printf "%d\n" n
+  | BoolVal(b) -> Printf.printf "%b\n" b
+  | _ -> assert false

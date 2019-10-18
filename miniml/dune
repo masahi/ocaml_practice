@@ -8,5 +8,5 @@
 
 (executable
  (name main)
- (libraries base)
+ (libraries core_kernel)
 )

@@ -4,11 +4,11 @@ let parse str =
   Parser.main Lexer.token
     (Lexing.from_string str)
 
+let read_file file =
+  let open Core_kernel in
+  In_channel.read_all file
+
 let _ =
-  let parsed =
-    parse "let rec fact x = if x = 0 then 1 else x * (fact (x-1)) in fact 5" in
-  let open Eval in
-  let env = emptyenv () in
-  match eval parsed env with
-  | IntVal(x) -> Printf.printf "%d\n" x
-  | _ -> assert false
+  let input = read_file Sys.argv.(1) in
+  let parsed = parse input in
+  Eval.eval_top parsed |> print_value
