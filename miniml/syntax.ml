@@ -1,3 +1,5 @@
+open Base
+
 type exp =
   | Var of string         (* variable e.g. x *)
   | IntLit of int         (* integer literal e.g. 17 *)
@@ -35,7 +37,15 @@ type value =
 and
   env = (string * value) list
 
+let to_string = function
+  | IntVal(n) -> Int.to_string n
+  | BoolVal(b) -> Bool.to_string b
+  | _ -> assert false
+
 let print_value = function
-  | IntVal(n) -> Printf.printf "%d\n" n
-  | BoolVal(b) -> Printf.printf "%b\n" b
+  | IntVal(n) -> Stdio.printf "%d\n" n
+  | BoolVal(b) -> Stdio.printf "%b\n" b
+  | ListVal(lst) ->
+    let str = List.map ~f:to_string lst |> String.concat ~sep:", " in
+    Stdio.printf "[%s]\n" str
   | _ -> assert false

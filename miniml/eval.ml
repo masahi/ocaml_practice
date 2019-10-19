@@ -22,12 +22,12 @@ let rec eval e env =
   | Plus(e1,e2)  -> binop (+) e1 e2 env
   | Minus(e1,e2)  -> binop (-) e1 e2 env
   | Eq(e1,e2) ->
-      begin
-	match (eval e1 env, eval e2 env) with
-	  | (IntVal(n1),IntVal(n2)) -> BoolVal(n1=n2)
-	  | (BoolVal(b1),BoolVal(b2)) -> BoolVal(b1=b2)
-	  | _ -> failwith "wrong value"
-      end
+    begin
+      match (eval e1 env, eval e2 env) with
+      | (IntVal(n1),IntVal(n2)) -> BoolVal(n1=n2)
+      | (BoolVal(b1),BoolVal(b2)) -> BoolVal(b1=b2)
+      | _ -> failwith "wrong value"
+    end
   | Times(e1,e2) -> binop ( * ) e1 e2 env
   | If(e1,e2,e3) ->
     begin
@@ -56,6 +56,13 @@ let rec eval e env =
   | LetRec(f,x,e1,e2) ->
     let env1 = ext env f (RecFunVal (f, x, e1, env))
     in eval e2 env1
+  | Empty -> ListVal([])
+  | Cons(e1,e2) ->
+    begin
+      match (eval e1 env, eval e2 env) with
+      | (v1,ListVal(v2)) -> ListVal(v1 :: v2)
+      | _ -> assert false
+    end
   | _ -> failwith "unknown expression"
 
 let eval_top e =
