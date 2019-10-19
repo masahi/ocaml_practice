@@ -26,6 +26,7 @@ let rec eval e env =
       match (eval e1 env, eval e2 env) with
       | (IntVal(n1),IntVal(n2)) -> BoolVal(n1=n2)
       | (BoolVal(b1),BoolVal(b2)) -> BoolVal(b1=b2)
+      | (ListVal(l1), ListVal(l2)) -> BoolVal(l1=l2)
       | _ -> failwith "wrong value"
     end
   | Times(e1,e2) -> binop ( * ) e1 e2 env
@@ -62,6 +63,16 @@ let rec eval e env =
       match (eval e1 env, eval e2 env) with
       | (v1,ListVal(v2)) -> ListVal(v1 :: v2)
       | _ -> assert false
+    end
+  | Head(lst) ->
+    begin match eval lst env with
+      | ListVal(hd::_) -> hd
+      | _ -> failwith "hd applied to wrong arg"
+    end
+  | Tail(lst) ->
+    begin match eval lst env with
+      | ListVal(_::tl) -> ListVal(tl)
+      | _ -> failwith "tail applied to wrong arg"
     end
   | _ -> failwith "unknown expression"
 

@@ -48,4 +48,5 @@ let print_value = function
   | ListVal(lst) ->
     let str = List.map ~f:to_string lst |> String.concat ~sep:", " in
     Stdio.printf "[%s]\n" str
+  | FunVal(_) | RecFunVal(_) -> Stdio.printf "fun val\n"
   | _ -> assert false
