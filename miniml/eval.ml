@@ -10,6 +10,14 @@ let rec lookup x env =
   | (y,v)::tl -> if x=y then v
     else lookup x tl
 
+let try_pat pat exp env =
+  match pat, exp with
+  | Empty, ListVal([]) -> Some env
+  | Cons(Var(hd1), Var(tl1)), ListVal(hd2 :: tl2) ->
+    let newenv = ext (ext env hd1 hd2) tl1 (ListVal tl2) in
+    Some newenv
+  | _ -> None
+
 let rec eval e env =
   let binop f e1 e2 env =
     match (eval e1 env, eval e2 env) with
@@ -74,7 +82,16 @@ let rec eval e env =
       | ListVal(_::tl) -> ListVal(tl)
       | _ -> failwith "tail applied to wrong arg"
     end
+  | Match(exp, pat_list) ->
+    let v = eval exp env in
+    eval_match v env pat_list
   | _ -> failwith "unknown expression"
+and eval_match v env = function
+  | [] -> failwith "pattern match failed"
+  | (pat, expr)::rest ->
+    match try_pat pat v env with
+    | None -> eval_match v env rest
+    | Some(newenv) -> eval expr newenv
 
 let eval_top e =
   let env = emptyenv () in
