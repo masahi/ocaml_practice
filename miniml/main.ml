@@ -10,6 +10,6 @@ let read_file file =
 
 let _ =
   let input = read_file Sys.argv.(1) in
-  let parsed = parse input in
+  let parsed = parse input |> Desugar.match_to_if in
   Eval.eval_top parsed |> print_value;
   Cam.compile parsed |> Cam.eval |> print_value
