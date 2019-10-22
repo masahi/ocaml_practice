@@ -19,25 +19,23 @@ let try_pat pat exp env =
   | _ -> None
 
 let rec eval e env =
-  let binop f e1 e2 env =
-    match (eval e1 env, eval e2 env) with
-    | (IntVal(n1),IntVal(n2)) -> IntVal(f n1 n2)
+  let eval_binop op e1 e2 env =
+    let apply_op v1 v2 = function
+      | Plus -> IntVal(v1 + v2)
+      | Minus -> IntVal(v1 - v2)
+      | Times -> IntVal(v1 * v2)
+      | Eq -> BoolVal(v1 = v2)
+    in
+    match (op, eval e1 env, eval e2 env) with
+    | (_, IntVal(v1), IntVal(v2)) -> apply_op v1 v2 op
+    | (Eq, BoolVal(b1), BoolVal(b2)) -> BoolVal(b1=b2)
+    | (Eq, ListVal(l1), ListVal(l2)) -> BoolVal(l1=l2)
     | _ -> failwith "integer value expected"
   in
   match e with
   | Var(x)       -> lookup x env
   | IntLit(n)    -> IntVal(n)
-  | Plus(e1,e2)  -> binop (+) e1 e2 env
-  | Minus(e1,e2)  -> binop (-) e1 e2 env
-  | Eq(e1,e2) ->
-    begin
-      match (eval e1 env, eval e2 env) with
-      | (IntVal(n1),IntVal(n2)) -> BoolVal(n1=n2)
-      | (BoolVal(b1),BoolVal(b2)) -> BoolVal(b1=b2)
-      | (ListVal(l1), ListVal(l2)) -> BoolVal(l1=l2)
-      | _ -> failwith "wrong value"
-    end
-  | Times(e1,e2) -> binop ( * ) e1 e2 env
+  | Binop(op, e1, e2) -> eval_binop op e1 e2 env
   | If(e1,e2,e3) ->
     begin
       match (eval e1 env) with

@@ -8,10 +8,7 @@ open Syntax
 %token PLUS     // '+'
 %token MINUS    // '-'
 %token ASTERISK // '*'
-%token SLASH    // '/'
 %token EQUAL    // '='
-%token LESS     // '<'
-%token GREATER  // '>'
 %token COLCOL   // "::"
 
 %token LPAREN   // '('
@@ -41,10 +38,9 @@ open Syntax
 
 %nonassoc IN ELSE ARROW WITH
 %left VBAR
-%left EQUAL GREATER LESS
 %right COLCOL
 %left PLUS MINUS
-%left ASTERISK SLASH
+%left ASTERISK
 %nonassoc UNARY
 %left VAR INT TRUE FALSE LBRA LPAREN
 
@@ -84,21 +80,15 @@ exp:
   | exp arg_exp
     { App ($1, $2) }
   | MINUS exp %prec UNARY
-    { Minus (IntLit 0, $2) }
+    { Binop (Minus, IntLit 0, $2) }
   | exp PLUS exp
-    { Plus ($1, $3) }
+    { Binop (Plus, $1, $3) }
   | exp MINUS exp
-    { Minus ($1, $3) }
+    { Binop (Minus, $1, $3) }
   | exp ASTERISK exp
-    { Times ($1, $3) }
-  | exp SLASH exp
-    { Div ($1, $3) }
+    { Binop (Times, $1, $3) }
   | exp EQUAL exp
-    { Eq ($1, $3) }
-  | exp LESS exp
-    { Less ($1, $3) }
-  | exp GREATER exp
-    { Greater ($1, $3) }
+    { Binop (Eq, $1, $3) }
   | exp COLCOL exp
     { Cons ($1, $3) }
   | HEAD arg_exp

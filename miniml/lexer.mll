@@ -14,10 +14,7 @@ rule token = parse
   | '+'       { PLUS }
   | '-'       { MINUS }
   | '*'       { ASTERISK }
-  | '/'       { SLASH }
   | '='       { EQUAL }
-  | '<'       { LESS }
-  | '>'       { GREATER }
   | ';'       { SEMICOL }
   | "::"      { COLCOL }
   | '('       { LPAREN }

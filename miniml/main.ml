@@ -12,5 +12,4 @@ let _ =
   let input = read_file Sys.argv.(1) in
   let parsed = parse input in
   Eval.eval_top parsed |> print_value;
-  let cam_instr = Cam.compile parsed [] in
-  Cam.eval cam_instr [] [] |> Cam.print_value
+  Cam.compile parsed |> Cam.eval |> print_value

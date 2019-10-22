@@ -9,18 +9,17 @@ type exp =
   | LetRec of string * string * exp * exp   (* letrec f x=e in e *)
   | Fun of string * exp   (* fun x -> e *)
   | App of exp * exp      (* function application i.e. e e *)
-  | Eq of exp * exp       (* e = e *)
-  | Greater of exp * exp  (* e > e *)
-  | Less of exp * exp     (* e < e *)
-  | Plus of exp * exp     (* e + e *)
-  | Minus of exp * exp    (* e - e *)
-  | Times of exp * exp    (* e * e *)
-  | Div of exp * exp      (* e / e *)
+  | Binop of binop * exp * exp
   | Empty                 (* [ ] *)
-  | Match of exp * ((exp * exp) list)    (* match e with e->e | ... *)
   | Cons of exp * exp     (* e :: e *)
   | Head of exp           (* List.hd e *)
   | Tail of exp           (* List.tl e *)
+  | Match of exp * ((exp * exp) list)    (* match e with e->e | ... *)
+and binop =
+  | Plus
+  | Minus
+  | Times
+  | Eq
 
 type value =
   | IntVal  of int        (* integer value e.g. 17 *)
@@ -30,9 +29,6 @@ type value =
                           (* function value e.g. \x. x+1 with env *)
   | RecFunVal of string * string * exp * env
                           (* recursive function value: solution-1 *)
-                          (* let rec f x = e1 in e2 *)
-  | RecFunVal2 of string * string * exp * env ref
-                          (* recursive function value: solution-2 *)
                           (* let rec f x = e1 in e2 *)
 and
   env = (string * value) list
@@ -46,7 +42,5 @@ let print_value = function
   | IntVal(n) -> Stdio.printf "%d\n" n
   | BoolVal(b) -> Stdio.printf "%b\n" b
   | ListVal(lst) ->
-    let str = List.map ~f:to_string lst |> String.concat ~sep:", " in
-    Stdio.printf "[%s]\n" str
+    List.map ~f:to_string lst |> String.concat ~sep:", " |> Stdio.printf "[%s]\n"
   | FunVal(_) | RecFunVal(_) -> Stdio.printf "fun val\n"
-  | _ -> assert false
