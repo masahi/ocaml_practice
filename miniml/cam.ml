@@ -1,4 +1,3 @@
-(* syntax.ml *)
 type cam_instr =
   | CAM_Ldi of int
   | CAM_Ldb of bool
@@ -45,49 +44,26 @@ let rec eval c env s =
       | CAM_Eq -> CAM_BoolVal(v1 = v2)
     in
     match s with
-    | [] -> failwith "stack empty"
-    | [_] -> failwith "stack contains only one value"
     | CAM_IntVal(v1)::CAM_IntVal(v2)::tl -> eval next_instrs env (apply_op v1 v2 :: tl)
     | _ -> assert false
   in
-  match c with
-  | [] -> (match s with
-          | [] -> failwith "stack empty"
-          | [v] -> v
-           | _ -> failwith "stack contains more than two values")
-
-  | x::xs -> (match x with
-              | CAM_Ldi(n) -> eval xs env (CAM_IntVal(n)::s)
-              | CAM_Ldb(b) -> eval xs env (CAM_BoolVal(b)::s)
-              | CAM_Access(n) ->
-                 let value = access_env n env in
-                 eval xs env (value::s)
-              | CAM_Closure(code) -> eval xs env (CAM_ClosVal(code, env)::s)
-              | CAM_Apply -> (match s with
-                              | [] -> failwith "Apply: stack empty"
-                              | [_] -> failwith "Apply: stack contains only one value"
-                              | clo::v::tl -> (match clo with
-                                               | CAM_ClosVal(code, clo_env) -> eval code (v::clo::clo_env) (CAM_ClosVal(xs, env)::tl)
-                                               | _ -> failwith "closure expected on top of the stack"))
-              | CAM_Return -> (match s with
-                               | [] -> failwith "stack empty"
-                               | [_] -> failwith "stack contains only one value"
-                               | v::clo::tl -> (match clo with
-                                                | CAM_ClosVal(code, clo_env) -> eval code clo_env (v::tl)
-                                                | _ -> failwith "closure expected on top of the stack"))
-              | CAM_Let  -> (match s with
-                             | [] -> failwith "stack empty"
-                             | v::tl -> eval xs (v::env) tl)
-              | CAM_EndLet -> (match env with
-                               | [] -> failwith "stack empty"
-                               | _::tl -> eval xs tl s)
-              | CAM_Test(c1, c2) -> (match s with
-                                     | [] -> failwith "stack empty"
-                                     | b::tl -> (match b with
-                                                 | CAM_BoolVal(true) -> eval (c1 @ xs) env tl
-                                                 | CAM_BoolVal(false) -> eval (c2 @ xs) env tl
-                                                 | _ -> failwith "bool expected"))
-              | CAM_Binop(op) -> eval_binop op env s xs)
+  match c, s with
+  | [], [v] -> v
+  | CAM_Ldi(n)::xs, _ -> eval xs env (CAM_IntVal(n)::s)
+  | CAM_Ldb(b)::xs, _ -> eval xs env (CAM_BoolVal(b)::s)
+  | CAM_Access(n)::xs, _ ->
+    let value = access_env n env in
+    eval xs env (value::s)
+  | CAM_Closure(code)::xs, _ -> eval xs env (CAM_ClosVal(code, env)::s)
+  | CAM_Apply::xs, CAM_ClosVal(code, clo_env)::v::tl ->
+    eval code (v::CAM_ClosVal(code, clo_env)::clo_env) (CAM_ClosVal(xs, env)::tl)
+  | CAM_Return::_, v::CAM_ClosVal(code, clo_env)::tl -> eval code clo_env (v::tl)
+  | CAM_Let::xs, v::tl -> eval xs (v::env) tl
+  | CAM_EndLet::xs, _::tl -> eval xs tl s
+  | CAM_Test(c1, _)::xs, CAM_BoolVal(true)::tl -> eval (c1 @ xs) env tl
+  | CAM_Test(_, c2)::xs, CAM_BoolVal(false)::tl -> eval (c2 @ xs) env tl
+  | CAM_Binop(op)::xs, _ -> eval_binop op env s xs
+  | _ -> assert false
 
 let rec compile e env =
   let open Syntax in
@@ -109,7 +85,8 @@ let rec compile e env =
   | Var(x) -> [CAM_Access(position x env)]
   | Fun(x, e) -> [CAM_Closure(compile e (x::x::env) @ [CAM_Return])]
   | App(e1, e2) -> compile e2 env @ compile e1 env @ [CAM_Apply]
-  | LetRec(f, x, e1, e2) -> [CAM_Closure(compile e1 (x::f::env) @ [CAM_Return])] @ [CAM_Let] @ compile e2 (f::env) @ [CAM_EndLet]
+  | LetRec(f, x, e1, e2) ->
+    [CAM_Closure(compile e1 (x::f::env) @ [CAM_Return])] @ [CAM_Let] @ compile e2 (f::env) @ [CAM_EndLet]
   | _ -> failwith "not supported"
 
 let convert_value cam_val =
