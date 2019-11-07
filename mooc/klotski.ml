@@ -81,6 +81,41 @@ let int_list_set_operations =
     add = IntListSet.add
   }
 
+let archive_map opset rel (s, l) =
+  let new_elts = flat_map rel l in
+  let l' =
+    List.filter (fun elt -> opset.mem elt s |> not) new_elts
+  in
+  let s' =
+    List.fold_left (fun acc elt -> opset.add elt acc) s l'
+  in
+  (s', l')
+
+let solve' opset r p x =
+  let rec iter s l =
+    match find p l with
+    | Some(x) -> x
+    | None ->
+      let (s', l') = archive_map opset r (s, l) in
+      iter s' l'
+  in
+  let init_set = opset.add x opset.empty in
+  iter init_set [x]
+
+let solve_path' opset r p x =
+  let path_rel = fun path ->
+    match path with
+    | [] -> []
+    | hd::_ ->
+      List.map (fun next -> next :: path) (r hd)
+  in
+  let path_prop = fun path ->
+    match path with
+    | [] -> false
+    | hd::_ -> p hd
+  in
+  solve' opset path_rel path_prop [x] |> List.rev
+
 let _ =
-  let path = solve_path near (fun x -> x = 12) 0 in
+  let path = solve_path' int_list_set_operations near (fun x -> x = 12) 0 in
   List.iter (fun x -> Printf.printf "%d\n" x) path
