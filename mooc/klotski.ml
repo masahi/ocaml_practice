@@ -1,83 +1,121 @@
-type 'e rel = 'e -> 'e list
-type 'e prop = 'e -> bool
-type ('a, 'set) set_operations =
-  { empty : 'set ;
-    mem : 'a -> 'set -> bool ;
-    add : 'a -> 'set -> 'set }
-type ('configuration, 'move) puzzle =
-  { move : 'configuration -> 'move -> 'configuration;
-    possible_moves : 'configuration -> 'move list;
-    final : 'configuration -> bool }
+module List_ext = struct
+  (*for mooc environment*)
+  let filter_map f =
+    let rec aux accu = function
+      | [] -> List.rev accu
+      | x :: l ->
+        match f x with
+        | None -> aux accu l
+        | Some v -> aux (v :: accu) l
+    in
+    aux []
+  let concat_map l ~f =
+    let rec aux acc = function
+      | [] -> List.rev acc
+      | hd :: tl -> aux (List.rev_append (f hd) acc) tl
+    in
+    aux [] l
+  let rec find_opt p = function
+    | [] -> None
+    | x :: l -> if p x then Some x else find_opt p l
+end
+
+module Solver = struct
+  type 'e rel = 'e -> 'e list
+  type 'e prop = 'e -> bool
+  type ('a, 'set) set_operations =
+    { empty : 'set ;
+      mem : 'a -> 'set -> bool ;
+      add : 'a -> 'set -> 'set }
+  type ('configuration, 'move) puzzle =
+    { move : 'configuration -> 'move -> 'configuration;
+      possible_moves : 'configuration -> 'move list;
+      final : 'configuration -> bool }
+
+  let archive_map opset rel (s, l) =
+    let rec flat_map = function
+      | [] -> []
+      | x::xs ->
+        rel x @ (flat_map xs)
+    in
+    let new_elts = flat_map l in
+    (* Printf.printf "new_elts size: %d\n" (List.length new_elts); *)
+    let l' =
+      List.filter (fun elt ->
+          let found = opset.mem elt s in
+          (* Printf.printf "found? %b\n" found; *)
+          not found
+         ) new_elts
+    in
+    let s' =
+      List.fold_left (fun acc elt -> opset.add elt acc) s l'
+    in
+    (s', l')
+
+  let solve' opset r p x =
+    let rec iter s l =
+      match List_ext.find_opt p l with
+      | Some(x) -> x
+      | None ->
+        assert (List.length l > 0);
+        (* Printf.printf "foo %d\n" (List.length l); *)
+        let (s', l') = archive_map opset r (s, l) in
+        Printf.printf "frontier size: %d\n" (List.length l');
+        flush stdout;
+        iter s' l'
+    in
+    let init_set = opset.add x opset.empty in
+    iter init_set [x]
+
+  let solve_path' opset r p x =
+    let path_rel = fun path ->
+      match path with
+      | [] -> []
+      | hd::_ ->
+        List.map (fun next -> next :: path) (r hd)
+    in
+    let path_prop = fun path ->
+      match path with
+      | [] -> false
+      | hd::_ -> p hd
+    in
+    solve' opset path_rel path_prop [x] |> List.rev
+
+  let solve_puzzle p opset c =
+    let rel = fun conf ->
+      let moves = p.possible_moves conf in
+      (* Printf.printf "size of moves:%d\n" (List.length moves); *)
+      List.map (fun move -> p.move c move) moves
+    in
+    solve_path' opset rel p.final c
+end
+
 type piece_kind = S | H | V | C | X
 type piece = piece_kind * int
 type board = piece array array
-
-let archive_map opset rel (s, l) =
-  let rec flat_map = function
-    | [] -> []
-    | x::xs ->
-      rel x @ (flat_map xs)
-  in
-  let new_elts = flat_map l in
-  let l' =
-    List.filter (fun elt -> opset.mem elt s |> not) new_elts
-  in
-  let s' =
-    List.fold_left (fun acc elt -> opset.add elt acc) s l'
-  in
-  (s', l')
-
-let solve' opset r p x =
-  let rec find p = function
-    | [] -> None
-    | x::xs ->
-      if p x then Some(x)
-      else find p xs
-  in
-  let rec iter s l =
-    match find p l with
-    | Some(x) -> x
-    | None ->
-      let (s', l') = archive_map opset r (s, l) in
-      iter s' l'
-  in
-  let init_set = opset.add x opset.empty in
-  iter init_set [x]
-
-let solve_path' opset r p x =
-  let path_rel = fun path ->
-    match path with
-    | [] -> []
-    | hd::_ ->
-      List.map (fun next -> next :: path) (r hd)
-  in
-  let path_prop = fun path ->
-    match path with
-    | [] -> false
-    | hd::_ -> p hd
-  in
-  solve' opset path_rel path_prop [x] |> List.rev
-
-let solve_puzzle p opset c =
-  let rel = fun conf ->
-    let moves = p.possible_moves conf in
-    List.map (fun move -> p.move c move) moves
-  in
-  solve_path' opset rel p.final c
+type move = Move of piece * direction * board
+and direction = { dcol : int; drow : int }
 
 let x = (X, 0) and s = (S, 0) and h = (H, 0)
 let (c0, c1, c2, c3) = ((C, 0), (C, 1), (C, 2), (C, 3))
 let (v0, v1, v2, v3) = ((V, 0), (V, 1), (V, 2), (V, 3))
 let all_pieces : piece list = [ s; h; c0; c1; c2; c3; v0; v1; v2; v3 ]
+let string_of_piece (kind, ind) =
+  let char =
+    match kind with
+    | S -> "S"
+    | H -> "H"
+    | V -> "V"
+    | C -> "C"
+    | X -> "X"
+  in
+  Printf.sprintf "(%s, %d)" char ind
 
 let final board =
   board.(3).(1) = s &&
   board.(3).(2) = s &&
   board.(4).(1) = s &&
   board.(4).(2) = s
-
-type move = Move of piece * direction * board
-and direction = { dcol : int; drow : int }
 
 let move _ (Move (_, _, b)) = b
 
@@ -106,6 +144,9 @@ let move_piece board p {drow; dcol} =
     in
     List.for_all (fun (i, j) -> in_bound i j && board.(i).(j) = x) next_occupied
   in
+  let copy_board board =
+    Array.init 5 (fun i -> Array.copy board.(i))
+  in
   let pos = ref None in
   Array.iteri (fun i row ->
       Array.iteri (fun j elt ->
@@ -121,9 +162,10 @@ let move_piece board p {drow; dcol} =
   match !pos with
   | None -> None
   | Some(i, j) ->
+    (* Printf.printf "found %s at %d %d\n" (string_of_piece p) i j; *)
     let (next_occupied, next_vacant) = diff_occupied_pos (i, j) in
     if can_move next_occupied then begin
-      let board_copy = Array.copy board in
+      let board_copy = copy_board board in
       List.iter (fun (i, j) -> board_copy.(i).(j) <- p) next_occupied;
       List.iter (fun (i, j) -> board_copy.(i).(j) <- x) next_vacant;
       Some(board_copy)
@@ -131,32 +173,18 @@ let move_piece board p {drow; dcol} =
       None
 
 let possible_moves board =
-  let filter_map f =
-    let rec aux accu = function
-      | [] -> List.rev accu
-      | x :: l ->
-        match f x with
-        | None -> aux accu l
-        | Some v -> aux (v :: accu) l
-    in
-    aux []
-  in
-  let concat_map l ~f =
-    let rec aux acc = function
-      | [] -> List.rev acc
-      | hd :: tl -> aux (List.rev_append (f hd) acc) tl
-    in
-    aux [] l
-  in
   let get_moves p =
     let directions = [{drow=0; dcol=1}; {drow=0; dcol=(~-1)}; {drow=1; dcol=0}; {drow=(~-1); dcol=0}] in
-    filter_map (fun dir ->
+    List_ext.filter_map (fun dir ->
         match move_piece board p dir with
         | None -> None
-        | Some(b) -> Some(Move(p, dir, b))
+        | Some(b) ->
+          let {drow; dcol} = dir in
+          (* Printf.printf "move %s %d %d\n" (string_of_piece p) drow dcol; *)
+          Some(Move(p, dir, b))
       ) directions
   in
-  concat_map ~f:(fun p -> get_moves p) all_pieces
+  List_ext.concat_map ~f:(fun p -> get_moves p) all_pieces
 
 module BoardSetCompare = struct
     type t = board
@@ -192,6 +220,7 @@ module BoardSetCompare = struct
                   | Some(_) -> ()
                   | None ->
                     let c = compare_piece elt1 elt2 in
+
                     if c != 0 then result := Some(c)
                     else ()
             )
@@ -199,21 +228,26 @@ module BoardSetCompare = struct
             )
       (zip b1 b2);
       match !result with
-      | None -> 0
+      | None -> (* Printf.printf "return 0 from board compare \n"; *) 0
       | Some(c) -> c
 end
 
 module BoardListSet = Set.Make(struct
   type t = board list
-  let compare l1 l2 =
+  let rec compare l1 l2 =
     match l1, l2 with
     | [], [] -> 0
     | l, [] -> 1
     | [], l -> -1
-    | b1::_, b2::_ -> BoardSetCompare.compare b1 b2
+    | b1::tl1, b2::tl2 ->
+      let comp = BoardSetCompare.compare b1 b2 in
+      if comp = 0 then
+        compare tl1 tl2
+      else comp
 end)
 
 let solve_klotski initial_board =
+  let open Solver in
   let klotski = { move; possible_moves; final } in
   let board_list_set_operations =
   { empty = BoardListSet.empty;
@@ -243,3 +277,14 @@ let initial_board =
      [| v2 ; h  ; h  ; v3 |];
      [| v2 ; c0 ; c1 ; v3 |];
      [| c2 ; x  ; x  ; c3 |] |]
+
+let print_board board =
+  Array.iter (fun row ->
+      Array.iter (fun p -> Printf.printf "%s " (string_of_piece p)) row;
+      Printf.printf "\n"
+    )
+    board;
+  Printf.printf "\n"
+    
+let _ =
+  solve_klotski initial_board_trivial |> List.iter print_board 
