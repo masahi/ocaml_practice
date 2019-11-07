@@ -1,9 +1,6 @@
 type 'e rel = 'e -> 'e list
 type 'e prop = 'e -> bool
 
-let near = fun n ->
-  [n - 2; n - 1; n; n + 1; n + 2]
-
 let rec loop p f x =
   if p x = true then x
   else loop p f (f x)
@@ -117,5 +114,83 @@ let solve_path' opset r p x =
   solve' opset path_rel path_prop [x] |> List.rev
 
 let _ =
+  let near = fun n -> [n - 2; n - 1; n; n + 1; n + 2] in
   let path = solve_path' int_list_set_operations near (fun x -> x = 12) 0 in
   List.iter (fun x -> Printf.printf "%d\n" x) path
+
+type ('configuration, 'move) puzzle =
+  { move : 'configuration -> 'move -> 'configuration;
+    possible_moves : 'configuration -> 'move list;
+    final : 'configuration -> bool }
+
+let solve_puzzle p opset c =
+  let rel = fun conf ->
+    let moves = p.possible_moves conf in
+    List.map (fun move -> p.move c move) moves
+  in
+  solve_path' opset rel p.final c
+
+type piece_kind = S | H | V | C | X
+type piece = piece_kind * int
+let x = (X, 0) and s = (S, 0) and h = (H, 0)
+let (c0, c1, c2, c3) = ((C, 0), (C, 1), (C, 2), (C, 3))
+let (v0, v1, v2, v3) = ((V, 0), (V, 1), (V, 2), (V, 3))
+let all_pieces : piece list = [ s; h; c0; c1; c2; c3; v0; v1; v2; v3 ]
+
+type board = piece array array
+
+let final_board board =
+  board.(3).(1) = s &&
+  board.(3).(2) = s &&
+  board.(4).(1) = s &&
+  board.(4).(2) = s
+
+type move = Move of piece * direction * board
+and direction = { dcol : int; drow : int }
+
+let move _ (Move (_, _, b)) = b
+
+let move_piece board p {drow; dcol} =
+  let list_diff l1 l2 =
+    List.filter (fun elt -> List.mem elt l2 |> not ) l1
+  in
+  let occupied_pos (i, j) =
+    match p with
+    | (S, _) -> [(i, j); (i+1, j); (i, j+1); (i+1, j+1)]
+    | (H, _) -> [(i, j); (i, j+1)]
+    | (V, _) -> [(i, j); (i+1, j)]
+    | (C, _) -> [(i, j)]
+    | _ -> []
+  in
+  let diff_occupied_pos (i, j) =
+    let current = occupied_pos (i, j) in
+    let next = (occupied_pos (i+drow, j+dcol)) in
+    let next_occupied_pos = list_diff next current in
+    let next_vacant_pos = list_diff current next in
+    (next_occupied_pos, next_vacant_pos)
+  in
+  let can_move next_occupied =
+    List.filter (fun (i, j) -> board.(i).(j) != x) next_occupied = []
+  in
+  let pos = ref None in
+  Array.iteri (fun i row ->
+      Array.iteri (fun j elt ->
+          if elt = p then
+            match !pos with
+            | None ->
+              pos := Some(i, j)
+            | Some(i, j) -> ()
+          else
+            ()
+        ) row
+    ) board;
+  match !pos with
+  | None -> None
+  | Some(i, j) ->
+    let (next_occupied, next_vacant) = diff_occupied_pos (i, j) in
+    if can_move next_occupied then begin
+      List.iter (fun (i, j) -> board.(i).(j) <- p) next_occupied;
+      List.iter (fun (i, j) -> board.(i).(j) <- x) next_vacant;
+      Some(board)
+    end else
+      None
