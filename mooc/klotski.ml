@@ -55,7 +55,12 @@ type ('a, 'set) set_operations =
     mem : 'a -> 'set -> bool ;
     add : 'a -> 'set -> 'set }
 
-module IntSet = Set.Make(Int)
+let int_compare i1 i2 =
+  if i1 = i2 then 0
+  else
+  if i1 < i2 then -1
+  else 1
+
 module IntListSet = Set.Make(struct
   type t = int list
   let compare l1 l2 =
@@ -63,14 +68,8 @@ module IntListSet = Set.Make(struct
     | [], [] -> 0
     | l, [] -> 1
     | [], l -> -1
-    | hd1::_, hd2::_ -> Int.compare hd1 hd2
+    | hd1::_, hd2::_ -> int_compare hd1 hd2
 end)
-
-let int_set_operations =
-  { empty = IntSet.empty;
-    mem = IntSet.mem;
-    add = IntSet.add
-  }
 
 let int_list_set_operations =
   { empty = IntListSet.empty;
@@ -207,9 +206,19 @@ let concat_map l ~f =
   aux [] l
 
 let possible_moves board =
+  let filter_map f =
+    let rec aux accu = function
+      | [] -> List.rev accu
+      | x :: l ->
+        match f x with
+        | None -> aux accu l
+        | Some v -> aux (v :: accu) l
+    in
+    aux []
+  in
   let get_moves p =
     let directions = [{drow=0; dcol=1}; {drow=0; dcol=(~-1)}; {drow=1; dcol=0}; {drow=(~-1); dcol=0}] in
-    List.filter_map (fun dir ->
+    filter_map (fun dir ->
         match move_piece board p dir with
         | None -> None
         | Some(b) -> Some(Move(p, dir, b))
@@ -218,3 +227,83 @@ let possible_moves board =
   concat_map ~f:(fun p -> get_moves p) all_pieces
 
 let klotski = { move; possible_moves; final }
+
+module BoardSetCompare = struct
+    type t = board
+    let compare b1 b2 =
+      let map2 t1 t2 ~f =
+        let len = Array.length t1 in
+        Array.init len (fun i -> f t1.(i) t2.(i))
+      in
+      let zip t1 t2 =
+        map2 t1 t2 ~f:(fun x1 x2 -> x1, x2)
+      in
+      let compare_piece (k1, ind1) (k2, ind2) =
+        let kind_to_int = function
+          | S -> 5
+          | H -> 4
+          | C -> 3
+          | V -> 2
+          | X -> 1
+        in
+        if k1 = k2 then int_compare ind1 ind2
+        else int_compare (kind_to_int k1) (kind_to_int k2)
+      in
+      let result = ref None in
+      Array.iter (fun (row1, row2) ->
+          Array.iter (fun (elt1, elt2) ->
+                  match !result with
+                  | Some(_) -> ()
+                  | None ->
+                    let c = compare_piece elt1 elt2 in
+                    if c != 0 then result := Some(c)
+                    else ()
+            )
+            (zip row1 row2)
+            )
+      (zip b1 b2);
+      match !result with
+      | None -> 0
+      | Some(c) -> c
+end
+
+module BoardListSet = Set.Make(struct
+  type t = board list
+  let compare l1 l2 =
+    match l1, l2 with
+    | [], [] -> 0
+    | l, [] -> 1
+    | [], l -> -1
+    | b1::_, b2::_ -> BoardSetCompare.compare b1 b2
+end)
+
+let board_list_set_operations =
+  { empty = BoardListSet.empty;
+    mem = BoardListSet.mem;
+    add = BoardListSet.add
+  }
+
+let solve_klotski initial_board =
+  solve_puzzle klotski board_list_set_operations initial_board
+
+
+let initial_board_simpler =
+  [| [| c2 ; s  ; s  ; c1 |] ;
+     [| c0 ; s  ; s  ; c3 |] ;
+     [| v1 ; v2 ; v3 ; v0 |] ;
+     [| v1 ; v2 ; v3 ; v0 |] ;
+     [| x  ; x  ; x  ; x  |] |]
+
+let initial_board_trivial =
+  [| [| x  ; s  ; s  ; x  |] ;
+     [| x  ; s  ; s  ; x  |] ;
+     [| x  ; x  ; x  ; x  |] ;
+     [| x  ; x  ; x  ; x  |] ;
+     [| x  ; x  ; x  ; x  |] |]
+
+let initial_board =
+  [| [| v0 ; s  ; s  ; v1 |];
+     [| v0 ; s  ; s  ; v1 |];
+     [| v2 ; h  ; h  ; v3 |];
+     [| v2 ; c0 ; c1 ; v3 |];
+     [| c2 ; x  ; x  ; c3 |] |]
