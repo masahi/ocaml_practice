@@ -1,84 +1,24 @@
 type 'e rel = 'e -> 'e list
 type 'e prop = 'e -> bool
-
-let rec loop p f x =
-  if p x = true then x
-  else loop p f (f x)
-
-let rec exists p = function
-  | [] -> false
-  | x::xs ->
-    if p x then true
-    else exists p xs
-
-let rec find p = function
-  | [] -> None
-  | x::xs ->
-    if p x then Some(x)
-    else find p xs
-
-let rec flat_map r = function
-  | [] -> []
-  | x::xs ->
-    r x @ (flat_map r xs)
-
-let rec iter_rel r n = fun x ->
-  if n <= 1 then r x
-  else
-    let new_rel = iter_rel r (n - 1) in
-    flat_map r (new_rel x)
-
-let solve r p x =
-  let rec iter configs =
-    match find p configs with
-    | Some(x) -> x
-    | None -> iter (flat_map r configs)
-  in
-  iter [x]
-
-let solve_path r p x =
-  let path_rel = fun path ->
-    match path with
-    | [] -> []
-    | hd::_ ->
-      List.map (fun next -> next :: path) (r hd)
-  in
-  let path_prop = fun path ->
-    match path with
-    | [] -> false
-    | hd::_ -> p hd
-  in
-  solve path_rel path_prop [x] |> List.rev
-
 type ('a, 'set) set_operations =
   { empty : 'set ;
     mem : 'a -> 'set -> bool ;
     add : 'a -> 'set -> 'set }
-
-let int_compare i1 i2 =
-  if i1 = i2 then 0
-  else
-  if i1 < i2 then -1
-  else 1
-
-module IntListSet = Set.Make(struct
-  type t = int list
-  let compare l1 l2 =
-    match l1, l2 with
-    | [], [] -> 0
-    | l, [] -> 1
-    | [], l -> -1
-    | hd1::_, hd2::_ -> int_compare hd1 hd2
-end)
-
-let int_list_set_operations =
-  { empty = IntListSet.empty;
-    mem = IntListSet.mem;
-    add = IntListSet.add
-  }
+type ('configuration, 'move) puzzle =
+  { move : 'configuration -> 'move -> 'configuration;
+    possible_moves : 'configuration -> 'move list;
+    final : 'configuration -> bool }
+type piece_kind = S | H | V | C | X
+type piece = piece_kind * int
+type board = piece array array
 
 let archive_map opset rel (s, l) =
-  let new_elts = flat_map rel l in
+  let rec flat_map = function
+    | [] -> []
+    | x::xs ->
+      rel x @ (flat_map xs)
+  in
+  let new_elts = flat_map l in
   let l' =
     List.filter (fun elt -> opset.mem elt s |> not) new_elts
   in
@@ -88,6 +28,12 @@ let archive_map opset rel (s, l) =
   (s', l')
 
 let solve' opset r p x =
+  let rec find p = function
+    | [] -> None
+    | x::xs ->
+      if p x then Some(x)
+      else find p xs
+  in
   let rec iter s l =
     match find p l with
     | Some(x) -> x
@@ -112,16 +58,6 @@ let solve_path' opset r p x =
   in
   solve' opset path_rel path_prop [x] |> List.rev
 
-let _ =
-  let near = fun n -> [n - 2; n - 1; n; n + 1; n + 2] in
-  let path = solve_path' int_list_set_operations near (fun x -> x = 12) 0 in
-  List.iter (fun x -> Printf.printf "%d\n" x) path
-
-type ('configuration, 'move) puzzle =
-  { move : 'configuration -> 'move -> 'configuration;
-    possible_moves : 'configuration -> 'move list;
-    final : 'configuration -> bool }
-
 let solve_puzzle p opset c =
   let rel = fun conf ->
     let moves = p.possible_moves conf in
@@ -129,14 +65,10 @@ let solve_puzzle p opset c =
   in
   solve_path' opset rel p.final c
 
-type piece_kind = S | H | V | C | X
-type piece = piece_kind * int
 let x = (X, 0) and s = (S, 0) and h = (H, 0)
 let (c0, c1, c2, c3) = ((C, 0), (C, 1), (C, 2), (C, 3))
 let (v0, v1, v2, v3) = ((V, 0), (V, 1), (V, 2), (V, 3))
 let all_pieces : piece list = [ s; h; c0; c1; c2; c3; v0; v1; v2; v3 ]
-
-type board = piece array array
 
 let final board =
   board.(3).(1) = s &&
@@ -198,13 +130,6 @@ let move_piece board p {drow; dcol} =
     end else
       None
 
-let concat_map l ~f =
-  let rec aux acc = function
-    | [] -> List.rev acc
-    | hd :: tl -> aux (List.rev_append (f hd) acc) tl
-  in
-  aux [] l
-
 let possible_moves board =
   let filter_map f =
     let rec aux accu = function
@@ -216,6 +141,13 @@ let possible_moves board =
     in
     aux []
   in
+  let concat_map l ~f =
+    let rec aux acc = function
+      | [] -> List.rev acc
+      | hd :: tl -> aux (List.rev_append (f hd) acc) tl
+    in
+    aux [] l
+  in
   let get_moves p =
     let directions = [{drow=0; dcol=1}; {drow=0; dcol=(~-1)}; {drow=1; dcol=0}; {drow=(~-1); dcol=0}] in
     filter_map (fun dir ->
@@ -225,8 +157,6 @@ let possible_moves board =
       ) directions
   in
   concat_map ~f:(fun p -> get_moves p) all_pieces
-
-let klotski = { move; possible_moves; final }
 
 module BoardSetCompare = struct
     type t = board
@@ -245,6 +175,12 @@ module BoardSetCompare = struct
           | C -> 3
           | V -> 2
           | X -> 1
+        in
+        let int_compare i1 i2 =
+          if i1 = i2 then 0
+          else
+          if i1 < i2 then -1
+          else 1
         in
         if k1 = k2 then int_compare ind1 ind2
         else int_compare (kind_to_int k1) (kind_to_int k2)
@@ -277,15 +213,15 @@ module BoardListSet = Set.Make(struct
     | b1::_, b2::_ -> BoardSetCompare.compare b1 b2
 end)
 
-let board_list_set_operations =
+let solve_klotski initial_board =
+  let klotski = { move; possible_moves; final } in
+  let board_list_set_operations =
   { empty = BoardListSet.empty;
     mem = BoardListSet.mem;
     add = BoardListSet.add
   }
-
-let solve_klotski initial_board =
+  in
   solve_puzzle klotski board_list_set_operations initial_board
-
 
 let initial_board_simpler =
   [| [| c2 ; s  ; s  ; c1 |] ;
