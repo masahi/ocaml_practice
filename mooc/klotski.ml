@@ -139,7 +139,7 @@ let all_pieces : piece list = [ s; h; c0; c1; c2; c3; v0; v1; v2; v3 ]
 
 type board = piece array array
 
-let final_board board =
+let final board =
   board.(3).(1) = s &&
   board.(3).(2) = s &&
   board.(4).(1) = s &&
@@ -170,7 +170,10 @@ let move_piece board p {drow; dcol} =
     (next_occupied_pos, next_vacant_pos)
   in
   let can_move next_occupied =
-    List.filter (fun (i, j) -> board.(i).(j) != x) next_occupied = []
+    let in_bound i j =
+      i >= 0 && i < 5 && j >= 0 && j < 4
+    in
+    List.for_all (fun (i, j) -> in_bound i j && board.(i).(j) = x) next_occupied
   in
   let pos = ref None in
   Array.iteri (fun i row ->
@@ -189,8 +192,29 @@ let move_piece board p {drow; dcol} =
   | Some(i, j) ->
     let (next_occupied, next_vacant) = diff_occupied_pos (i, j) in
     if can_move next_occupied then begin
-      List.iter (fun (i, j) -> board.(i).(j) <- p) next_occupied;
-      List.iter (fun (i, j) -> board.(i).(j) <- x) next_vacant;
-      Some(board)
+      let board_copy = Array.copy board in
+      List.iter (fun (i, j) -> board_copy.(i).(j) <- p) next_occupied;
+      List.iter (fun (i, j) -> board_copy.(i).(j) <- x) next_vacant;
+      Some(board_copy)
     end else
       None
+
+let concat_map l ~f =
+  let rec aux acc = function
+    | [] -> List.rev acc
+    | hd :: tl -> aux (List.rev_append (f hd) acc) tl
+  in
+  aux [] l
+
+let possible_moves board =
+  let get_moves p =
+    let directions = [{drow=0; dcol=1}; {drow=0; dcol=(~-1)}; {drow=1; dcol=0}; {drow=(~-1); dcol=0}] in
+    List.filter_map (fun dir ->
+        match move_piece board p dir with
+        | None -> None
+        | Some(b) -> Some(Move(p, dir, b))
+      ) directions
+  in
+  concat_map ~f:(fun p -> get_moves p) all_pieces
+
+let klotski = { move; possible_moves; final }
