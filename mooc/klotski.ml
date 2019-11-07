@@ -53,6 +53,34 @@ let solve_path r p x =
   in
   solve path_rel path_prop [x] |> List.rev
 
+type ('a, 'set) set_operations =
+  { empty : 'set ;
+    mem : 'a -> 'set -> bool ;
+    add : 'a -> 'set -> 'set }
+
+module IntSet = Set.Make(Int)
+module IntListSet = Set.Make(struct
+  type t = int list
+  let compare l1 l2 =
+    match l1, l2 with
+    | [], [] -> 0
+    | l, [] -> 1
+    | [], l -> -1
+    | hd1::_, hd2::_ -> Int.compare hd1 hd2
+end)
+
+let int_set_operations =
+  { empty = IntSet.empty;
+    mem = IntSet.mem;
+    add = IntSet.add
+  }
+
+let int_list_set_operations =
+  { empty = IntListSet.empty;
+    mem = IntListSet.mem;
+    add = IntListSet.add
+  }
+
 let _ =
   let path = solve_path near (fun x -> x = 12) 0 in
   List.iter (fun x -> Printf.printf "%d\n" x) path
