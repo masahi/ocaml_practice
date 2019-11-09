@@ -12,18 +12,12 @@ module Solver = struct
 
   let archive_map opset rel (s, l) =
     let open Base in
-    let rec iter seen new_elts = function
-      | [] -> (seen, new_elts)
-      | x::xs ->
-        let (seen, new_elts) =
+    List.fold_left l ~init:(s, []) ~f:(fun (seen, new_elts) x ->
         List.fold_left (rel x) ~init:(seen, new_elts) ~f:(fun (set, frontiers) elt ->
             if opset.mem elt set then (set, frontiers)
             else (opset.add elt set, elt :: frontiers)
           )
-        in
-        iter seen new_elts xs
-    in
-    iter s [] l
+      )
 
   let solve' opset r p x =
     let rec iter s l round =
