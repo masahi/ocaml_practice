@@ -109,7 +109,7 @@ let rec convert_value cam_val =
   | CAM_IntVal(n) -> IntVal(n)
   | CAM_BoolVal(b) -> BoolVal(b)
   | CAM_ListVal(lst) -> ListVal(List.map convert_value lst)
-  | _ -> assert false
+  | CAM_ClosVal(_) -> FunVal("cam fun", Empty, [])
 
 let compile e = compile e []
 
