@@ -8,7 +8,6 @@ type zam_instr =
   | ZAM_Test of zam_code * zam_code
   | ZAM_Add
   | ZAM_Eq
-
   | ZAM_Apply
   | ZAM_TailApply
   | ZAM_PushMark
@@ -29,6 +28,11 @@ let rec access_env index env =
   | [] -> failwith "env empty"
   | x::xs -> if index = 0 then x
              else access_env (index-1) xs
+
+let rec position (x : string) (venv : string list) : int =
+  match venv with
+    | [] -> failwith "no matching variable in environment"
+    | y::venv2 -> if x=y then 0 else (position x venv2) + 1
 
 let rec eval c env arg_stack ret_stack =
   match c, arg_stack, ret_stack with
@@ -51,7 +55,8 @@ let rec eval c env arg_stack ret_stack =
   | ZAM_Eq::xs, ZAM_IntVal(v1)::ZAM_IntVal(v2)::tl, _ -> eval xs env (ZAM_BoolVal(v1 = v2) :: tl) ret_stack
   | ZAM_Apply::xs, ZAM_ClosVal(code, clo_env)::v::tl, _ ->
     eval code (v::ZAM_ClosVal(code, clo_env)::clo_env) tl (ZAM_ClosVal(xs, env)::ret_stack)
-  | ZAM_TailApply::_, ZAM_ClosVal(code, clo_env)::v::tl, _ ->
+  | ZAM_TailApply::_, ZAM_ClosVal
+(code, clo_env)::v::tl, _ ->
     eval code (v::ZAM_ClosVal(code, clo_env)::clo_env) tl ret_stack
   | ZAM_PushMark::xs, _, _ -> eval xs env (ZAM_Epsilon::arg_stack) ret_stack
   | ZAM_Grab::xs, ZAM_Epsilon::tl, ZAM_ClosVal(code, clo_env)::r -> eval code clo_env (ZAM_ClosVal(xs, env)::tl) r
@@ -59,3 +64,50 @@ let rec eval c env arg_stack ret_stack =
   | ZAM_Return::_, v::ZAM_Epsilon::tl, ZAM_ClosVal(code, clo_env)::r -> eval code clo_env (v::tl) r
   | ZAM_Return::_, ZAM_ClosVal(code, clo_env)::v::tl, _ -> eval code (v::ZAM_ClosVal(code, clo_env)::clo_env) tl ret_stack
   | _ -> assert false
+
+let rec compile e env =
+  let open Syntax in
+  let compile_binop op x y =
+    let y_code = compile y env in
+    let x_code = compile x env in
+    match op with
+      | Plus -> y_code @ x_code @ [ZAM_Add]
+      (* | Minus -> CAM_Sub
+       * | Times -> CAM_Mul *)
+      | Eq -> y_code @ x_code @ [ZAM_Eq]
+      | _ -> failwith "not implemented"
+  in
+  match e with
+  | IntLit(n) -> [ZAM_Ldi(n)]
+  | BoolLit(b) -> [ZAM_Ldb(b)]
+  | Binop(op, x, y) -> compile_binop op x y
+  | If(b, x, y) -> compile b env @ [ZAM_Test(compile x env, compile y env)]
+  | Let(x, e1, e2) -> (compile e1 env) @ [ZAM_Let] @ compile e2 (x::env) @ [ZAM_EndLet]
+  | Var(x) -> [ZAM_Access(position x env)]
+  | Fun(x, e) -> [ZAM_Closure(compile e (x::x::env) @ [ZAM_Return])]
+  | LetRec(f, x, e1, e2) ->
+    [ZAM_Closure(compile e1 (x::f::env) @ [ZAM_Return])] @ [ZAM_Let] @ compile e2 (f::env) @ [ZAM_EndLet]
+  | App(_) -> compile_app e env
+  | _ -> failwith "not implemented"
+  (* | Empty -> [ZAM_Ldl]
+   * | Cons(hd, tl) -> compile hd env @ compile tl env @ [ZAM_Cons]
+   * | Head(lst) -> compile lst env @ [ZAM_Head]
+   * | Tail(lst) -> compile lst env @ [ZAM_Tail]
+   * | Match(_, _) -> failwith "match found" *)
+and compile_app e env =
+  let open Syntax in
+  let rec compile_app_inner e env =
+    match e with
+    | App(func, e1) -> compile e1 env @ compile_app_inner func env
+    | _ -> compile e env
+  in
+  match e with
+  | App(func, e1) ->
+    let last_arg = compile e1 env in
+    [ZAM_PushMark] @ last_arg @ compile_app_inner func env @ [ZAM_Apply]
+  | _ -> assert false
+
+let compile e = compile e []
+
+let eval instrs =
+  eval instrs [] [] [] |> fun x -> x
