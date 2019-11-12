@@ -6,14 +6,18 @@ type zam_instr =
   | ZAM_Let
   | ZAM_EndLet
   | ZAM_Test of zam_code * zam_code
-  | ZAM_Add
-  | ZAM_Eq
+  | ZAM_Binop of binop
   | ZAM_Apply
   | ZAM_TailApply
   | ZAM_PushMark
   | ZAM_Grab
   | ZAM_Return
-and zam_code = zam_instr list  (* コードは、命令の列である *)
+and zam_code = zam_instr list
+and binop =
+  | ZAM_Add
+  | ZAM_Sub
+  | ZAM_Mul
+  | ZAM_Eq
 
 type zam_value =
   | ZAM_IntVal  of int
@@ -22,6 +26,23 @@ type zam_value =
   | ZAM_Epsilon
 and zam_stack = zam_value list
 and zam_env = zam_value list
+
+
+let string_of_zam_instr = function
+  | ZAM_Ldi(_) -> "Ldi"
+  | ZAM_Ldb(_) -> "Ldb"
+  | ZAM_Access(_) -> "Access"
+  | ZAM_Closure(_) -> "Closure"
+  | ZAM_Let -> "Let"
+  | ZAM_EndLet -> "EndLet"
+  | ZAM_Test(_) -> "Test"
+  | ZAM_Binop(_) -> "Binop"
+  | ZAM_Apply -> "Apply"
+  | ZAM_TailApply -> "TailApply"
+  | ZAM_PushMark -> "PushMark"
+  | ZAM_Grab -> "Grab"
+  | ZAM_Return -> "Return"
+
 
 let rec access_env index env =
   match env with
@@ -35,7 +56,21 @@ let rec position (x : string) (venv : string list) : int =
     | y::venv2 -> if x=y then 0 else (position x venv2) + 1
 
 let rec eval c env arg_stack ret_stack =
+  let eval_binop op ev arg_s ret_s next_instrs =
+    let apply_op v1 v2 =
+      match op with
+      | ZAM_Add -> ZAM_IntVal(v1 + v2)
+      | ZAM_Sub -> ZAM_IntVal(v1 - v2)
+      | ZAM_Mul -> ZAM_IntVal(v1 * v2)
+      | ZAM_Eq -> ZAM_BoolVal(v1 = v2)
+    in
+    match arg_s with
+    | ZAM_IntVal(v1)::ZAM_IntVal(v2)::tl -> eval next_instrs ev (apply_op v1 v2 :: tl) ret_s
+    (* | ZAM_ListVal(lst1)::ZAM_ListVal(lst2)::tl -> eval next_instrs env (ZAM_BoolVal(lst1 = lst2) :: tl) *)
+    | _ -> assert false
+  in
   match c, arg_stack, ret_stack with
+  | [], [v], _ -> v
   | ZAM_Ldi(n)::xs, _, _ -> eval xs env (ZAM_IntVal(n)::arg_stack) ret_stack
   | ZAM_Ldb(b)::xs, _, _ -> eval xs env (ZAM_BoolVal(b)::arg_stack) ret_stack
   | ZAM_Access(n)::xs, _, _ ->
@@ -51,8 +86,7 @@ let rec eval c env arg_stack ret_stack =
     end
   | ZAM_Test(c1, _)::xs, ZAM_BoolVal(true)::tl, _ -> eval (c1 @ xs) env tl ret_stack
   | ZAM_Test(_, c2)::xs, ZAM_BoolVal(false)::tl, _ -> eval (c2 @ xs) env tl ret_stack
-  | ZAM_Add::xs, ZAM_IntVal(v1)::ZAM_IntVal(v2)::tl, _ -> eval xs env (ZAM_IntVal(v1 + v2) :: tl) ret_stack
-  | ZAM_Eq::xs, ZAM_IntVal(v1)::ZAM_IntVal(v2)::tl, _ -> eval xs env (ZAM_BoolVal(v1 = v2) :: tl) ret_stack
+  | ZAM_Binop(op)::xs, _, _ -> eval_binop op env arg_stack ret_stack xs
   | ZAM_Apply::xs, ZAM_ClosVal(code, clo_env)::v::tl, _ ->
     eval code (v::ZAM_ClosVal(code, clo_env)::clo_env) tl (ZAM_ClosVal(xs, env)::ret_stack)
   | ZAM_TailApply::_, ZAM_ClosVal
@@ -70,12 +104,13 @@ let rec compile e env =
   let compile_binop op x y =
     let y_code = compile y env in
     let x_code = compile x env in
-    match op with
-      | Plus -> y_code @ x_code @ [ZAM_Add]
-      (* | Minus -> CAM_Sub
-       * | Times -> CAM_Mul *)
-      | Eq -> y_code @ x_code @ [ZAM_Eq]
-      | _ -> failwith "not implemented"
+    let zam_op = function
+      | Plus -> ZAM_Add
+      | Minus -> ZAM_Sub
+      | Times -> ZAM_Mul
+      | Eq -> ZAM_Eq
+    in
+    y_code @ x_code @ [ZAM_Binop(zam_op op)]
   in
   match e with
   | IntLit(n) -> [ZAM_Ldi(n)]
@@ -109,5 +144,15 @@ and compile_app e env =
 
 let compile e = compile e []
 
+let convert_value cam_val =
+  let open Syntax in
+  match cam_val with
+  | ZAM_IntVal(n) -> IntVal(n)
+  | ZAM_BoolVal(b) -> BoolVal(b)
+  (* | ZAM_ListVal(lst) -> ListVal(List.map convert_value lst) *)
+  | ZAM_ClosVal(_) -> FunVal("cam fun", Empty, [])
+  | _ -> assert false
+
 let eval instrs =
-  eval instrs [] [] [] |> fun x -> x
+  (* List.iter (fun inst -> Printf.printf "%s\n" (string_of_zam_instr inst)) instrs; *)
+  eval instrs [] [] [] |> convert_value
