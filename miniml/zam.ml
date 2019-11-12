@@ -89,8 +89,7 @@ let rec eval c env arg_stack ret_stack =
   | ZAM_Binop(op)::xs, _, _ -> eval_binop op env arg_stack ret_stack xs
   | ZAM_Apply::xs, ZAM_ClosVal(code, clo_env)::v::tl, _ ->
     eval code (v::ZAM_ClosVal(code, clo_env)::clo_env) tl (ZAM_ClosVal(xs, env)::ret_stack)
-  | ZAM_TailApply::_, ZAM_ClosVal
-(code, clo_env)::v::tl, _ ->
+  | ZAM_TailApply::_, ZAM_ClosVal(code, clo_env)::v::tl, _ ->
     eval code (v::ZAM_ClosVal(code, clo_env)::clo_env) tl ret_stack
   | ZAM_PushMark::xs, _, _ -> eval xs env (ZAM_Epsilon::arg_stack) ret_stack
   | ZAM_Grab::xs, ZAM_Epsilon::tl, ZAM_ClosVal(code, clo_env)::r -> eval code clo_env (ZAM_ClosVal(xs, env)::tl) r
@@ -99,11 +98,31 @@ let rec eval c env arg_stack ret_stack =
   | ZAM_Return::_, ZAM_ClosVal(code, clo_env)::v::tl, _ -> eval code (v::ZAM_ClosVal(code, clo_env)::clo_env) tl ret_stack
   | _ -> assert false
 
-let rec compile e env =
+let compile e env =
   let open Syntax in
-  let compile_binop op x y =
-    let y_code = compile y env in
-    let x_code = compile x env in
+  let rec compile_C e env =
+    match e with
+    | IntLit(_) | BoolLit(_) | Var(_) | Binop(_) -> compile_generic e env compile_C
+    | Let(_) -> compile_generic e env compile_C @ [ZAM_EndLet]
+    | If(_) -> compile_generic e env compile_C
+    | Fun(x, e) -> [ZAM_Closure(compile_T e (x::x::env))]
+    | LetRec(f, x, e1, e2) ->
+      [ZAM_Closure(compile_T e1 (x::f::env))] @ [ZAM_Let] @ compile_C e2 (f::env) @ [ZAM_EndLet]
+    | App(_) -> [ZAM_PushMark] @ compile_app_inner e env @ [ZAM_Apply]
+    | _ -> assert false
+  and compile_T e env =
+    match e with
+    | IntLit(_) | BoolLit(_) | Var(_) | Binop(_) -> (compile_generic e env compile_T) @ [ZAM_Return]
+    | Let(_) -> compile_generic e env compile_T
+    | If(_) -> compile_generic e env compile_T
+    | Fun(x, e) -> [ZAM_Grab] @ compile_T e (x::x::env)
+    | LetRec(f, x, e1, e2) ->
+      [ZAM_Closure(compile_T e1 (x::f::env))] @ [ZAM_Let] @ compile_T e2 (f::env)
+    | App(_) -> compile_app_inner e env @ [ZAM_TailApply]
+    | _ -> assert false
+  and compile_binop op x y env =
+    let y_code = compile_C y env in
+    let x_code = compile_C x env in
     let zam_op = function
       | Plus -> ZAM_Add
       | Minus -> ZAM_Sub
@@ -111,36 +130,26 @@ let rec compile e env =
       | Eq -> ZAM_Eq
     in
     y_code @ x_code @ [ZAM_Binop(zam_op op)]
-  in
-  match e with
-  | IntLit(n) -> [ZAM_Ldi(n)]
-  | BoolLit(b) -> [ZAM_Ldb(b)]
-  | Binop(op, x, y) -> compile_binop op x y
-  | If(b, x, y) -> compile b env @ [ZAM_Test(compile x env, compile y env)]
-  | Let(x, e1, e2) -> (compile e1 env) @ [ZAM_Let] @ compile e2 (x::env) @ [ZAM_EndLet]
-  | Var(x) -> [ZAM_Access(position x env)]
-  | Fun(x, e) -> [ZAM_Closure(compile e (x::x::env) @ [ZAM_Return])]
-  | LetRec(f, x, e1, e2) ->
-    [ZAM_Closure(compile e1 (x::f::env) @ [ZAM_Return])] @ [ZAM_Let] @ compile e2 (f::env) @ [ZAM_EndLet]
-  | App(_) -> compile_app e env
-  | _ -> failwith "not implemented"
-  (* | Empty -> [ZAM_Ldl]
-   * | Cons(hd, tl) -> compile hd env @ compile tl env @ [ZAM_Cons]
-   * | Head(lst) -> compile lst env @ [ZAM_Head]
-   * | Tail(lst) -> compile lst env @ [ZAM_Tail]
-   * | Match(_, _) -> failwith "match found" *)
-and compile_app e env =
-  let open Syntax in
-  let rec compile_app_inner e env =
+  and compile_generic e env compile_fun =
     match e with
-    | App(func, e1) -> compile e1 env @ compile_app_inner func env
-    | _ -> compile e env
+    | IntLit(n) -> [ZAM_Ldi(n)]
+    | BoolLit(b) -> [ZAM_Ldb(b)]
+    | Var(x) -> [ZAM_Access(position x env)]
+    | Binop(op, x, y) -> compile_binop op x y env
+    | If(b, x, y) -> compile_C b env @ [ZAM_Test(compile_fun x env, compile_fun y env)]
+    | Let(x, e1, e2) -> (compile_C e1 env) @ [ZAM_Let] @ compile_fun e2 (x::env)
+    | _ -> failwith "not implemented"
+    (* | Empty -> [ZAM_Ldl]
+     * | Cons(hd, tl) -> compile hd env @ compile tl env @ [ZAM_Cons]
+     * | Head(lst) -> compile lst env @ [ZAM_Head]
+     * | Tail(lst) -> compile lst env @ [ZAM_Tail]
+     * | Match(_, _) -> failwith "match found" *)
+  and compile_app_inner e env =
+    match e with
+    | App(func, e1) -> compile_C e1 env @ compile_app_inner func env
+    | _ -> compile_C e env
   in
-  match e with
-  | App(func, e1) ->
-    let last_arg = compile e1 env in
-    [ZAM_PushMark] @ last_arg @ compile_app_inner func env @ [ZAM_Apply]
-  | _ -> assert false
+  compile_C e env
 
 let compile e = compile e []
 
@@ -154,5 +163,5 @@ let convert_value cam_val =
   | _ -> assert false
 
 let eval instrs =
-  (* List.iter (fun inst -> Printf.printf "%s\n" (string_of_zam_instr inst)) instrs; *)
+  List.iter (fun inst -> Printf.printf "%s\n" (string_of_zam_instr inst)) instrs;
   eval instrs [] [] [] |> convert_value

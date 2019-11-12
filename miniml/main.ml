@@ -13,4 +13,4 @@ let _ =
   let parsed = parse input |> Desugar.match_to_if in
   Eval.eval_top parsed |> print_value;
   Cam.compile parsed |> Cam.eval |> print_value;
-  ignore(Zam.compile parsed |> Zam.eval)
+  Zam.compile parsed |> Zam.eval |> print_value
