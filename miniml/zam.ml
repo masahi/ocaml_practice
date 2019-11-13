@@ -32,7 +32,6 @@ type zam_value =
 and zam_stack = zam_value list
 and zam_env = zam_value list
 
-
 let rec string_of_zam_instr indent instr =
   let indent_str = String.init indent (fun _ -> ' ') in
   let sep = "\n" in
@@ -68,7 +67,6 @@ let rec string_of_zam_instr indent instr =
     | ZAM_Tail -> "List tail"
   in
   String.concat "" [indent_str; str]
-
 
 let rec access_env index env =
   match env with
@@ -171,10 +169,10 @@ let compile e env =
     | If(b, x, y) -> compile_C b env @ [ZAM_Test(compile_fun x env, compile_fun y env)]
     | Let(x, e1, e2) -> (compile_C e1 env) @ [ZAM_Let] @ compile_fun e2 (x::env)
     | Empty -> [ZAM_Ldl]
-    | Cons(hd, tl) -> compile_fun hd env @ compile_fun tl env @ [ZAM_Cons]
-    | Head(lst) -> compile_fun lst env @ [ZAM_Head]
-    | Tail(lst) -> compile_fun lst env @ [ZAM_Tail]
-    | Match(_, _) -> failwith "match found"
+    | Cons(hd, tl) -> compile_C hd env @ compile_C tl env @ [ZAM_Cons]
+    | Head(lst) -> compile_C lst env @ [ZAM_Head]
+    | Tail(lst) -> compile_C lst env @ [ZAM_Tail]
+    | Match(_, _) -> failwith "match should be desugared beforehand"
     | _ -> failwith "not implemented"
   and compile_app_inner e env =
     match e with

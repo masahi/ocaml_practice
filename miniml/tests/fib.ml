@@ -3,4 +3,4 @@ let rec fib x =
   else if x = 1 then 1
   else fib (x - 1) + fib (x - 2)
 in
-fib 15
+fib 10

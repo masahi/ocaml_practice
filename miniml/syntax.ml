@@ -35,9 +35,9 @@ let to_string = function
   | BoolVal(b) -> Bool.to_string b
   | _ -> assert false
 
-let print_value = function
-  | IntVal(n) -> Stdio.printf "%d\n" n
-  | BoolVal(b) -> Stdio.printf "%b\n" b
+let string_of_value = function
+  | IntVal(n) -> Printf.sprintf "%d" n
+  | BoolVal(b) -> Printf.sprintf "%b" b
   | ListVal(lst) ->
-    List.map ~f:to_string lst |> String.concat ~sep:", " |> Stdio.printf "[%s]\n"
-  | FunVal(_) | RecFunVal(_) -> Stdio.printf "fun val\n"
+    List.map ~f:to_string lst |> String.concat ~sep:", " |> Printf.sprintf "[%s]"
+  | FunVal(_) | RecFunVal(_) -> "fun val"
