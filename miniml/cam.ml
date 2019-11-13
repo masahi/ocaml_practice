@@ -28,6 +28,22 @@ type cam_value =
 and cam_stack = cam_value list
 and cam_env = cam_value list
 
+let string_of_cam_instr = function
+  | CAM_Ldi(_) -> "Ldi"
+  | CAM_Ldb(_) -> "Ldb"
+  | CAM_Access(_) -> "Access"
+  | CAM_Closure(_) -> "Closure"
+  | CAM_Let -> "Let"
+  | CAM_EndLet -> "EndLet"
+  | CAM_Test(_) -> "Test"
+  | CAM_Binop(_) -> "Binop"
+  | CAM_Apply -> "Apply"
+  | CAM_Return -> "Return"
+  | CAM_Ldl -> "List empty"
+  | CAM_Cons -> "List cons"
+  | CAM_Head -> "List head"
+  | CAM_Tail -> "List tail"
+
 let rec access_env index env =
   match env with
   | [] -> failwith "env empty"
@@ -114,4 +130,5 @@ let rec convert_value cam_val =
 let compile e = compile e []
 
 let eval instrs =
+  (* List.iter (fun inst -> Printf.printf "%s\n" (string_of_cam_instr inst)) instrs; *)
   eval instrs [] [] |> convert_value

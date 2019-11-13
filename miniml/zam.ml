@@ -33,24 +33,42 @@ and zam_stack = zam_value list
 and zam_env = zam_value list
 
 
-let string_of_zam_instr = function
-  | ZAM_Ldi(_) -> "Ldi"
-  | ZAM_Ldb(_) -> "Ldb"
-  | ZAM_Access(_) -> "Access"
-  | ZAM_Closure(_) -> "Closure"
-  | ZAM_Let -> "Let"
-  | ZAM_EndLet -> "EndLet"
-  | ZAM_Test(_) -> "Test"
-  | ZAM_Binop(_) -> "Binop"
-  | ZAM_Apply -> "Apply"
-  | ZAM_TailApply -> "TailApply"
-  | ZAM_PushMark -> "PushMark"
-  | ZAM_Grab -> "Grab"
-  | ZAM_Return -> "Return"
-  | ZAM_Ldl -> "List empty"
-  | ZAM_Cons -> "List cons"
-  | ZAM_Head -> "List head"
-  | ZAM_Tail -> "List tail"
+let rec string_of_zam_instr indent instr =
+  let indent_str = String.init indent (fun _ -> ' ') in
+  let sep = "\n" in
+  let string_of_binop = function
+  | ZAM_Add -> "Add"
+  | ZAM_Sub -> "Sub"
+  | ZAM_Mul -> "Mul"
+  | ZAM_Eq -> "Eq"
+  in
+  let str =
+    match instr with
+    | ZAM_Ldi(i) -> Printf.sprintf "Ldi %d" i
+    | ZAM_Ldb(b) -> Printf.sprintf "Ldb %b" b
+    | ZAM_Access(i) -> Printf.sprintf "Access %d" i
+    | ZAM_Closure(code) ->
+      let inner = List.map (fun instr -> string_of_zam_instr (indent + 1) instr) code |> String.concat sep in
+      Printf.sprintf "%sClosure begin\n%s\n%sClosure end" indent_str inner indent_str
+    | ZAM_Let -> "Let"
+    | ZAM_EndLet -> "EndLet"
+    | ZAM_Test(then_b, else_b) ->
+      let then_inner = List.map (fun instr -> string_of_zam_instr (indent + 1) instr) then_b |> String.concat sep in
+      let else_inner = List.map (fun instr -> string_of_zam_instr (indent + 1) instr) else_b |> String.concat sep in
+      Printf.sprintf "Test then\n%s\n%sTest else\n%s\n%sTest end" then_inner indent_str else_inner indent_str
+    | ZAM_Binop(op) -> Printf.sprintf "Binop %s" (string_of_binop op)
+    | ZAM_Apply -> "Apply"
+    | ZAM_TailApply -> "TailApply"
+    | ZAM_PushMark -> "PushMark"
+    | ZAM_Grab -> "Grab"
+    | ZAM_Return -> "Return"
+    | ZAM_Ldl -> "List empty"
+    | ZAM_Cons -> "List cons"
+    | ZAM_Head -> "List head"
+    | ZAM_Tail -> "List tail"
+  in
+  String.concat "" [indent_str; str]
+
 
 let rec access_env index env =
   match env with
@@ -177,5 +195,6 @@ let rec convert_value cam_val =
   | _ -> assert false
 
 let eval instrs =
-  List.iter (fun inst -> Printf.printf "%s\n" (string_of_zam_instr inst)) instrs;
+  Printf.printf "ZAM instructions:\n";
+  List.iter (fun inst -> Printf.printf "%s\n" (string_of_zam_instr 0 inst)) instrs;
   eval instrs [] [] [] |> convert_value
