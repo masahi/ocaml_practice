@@ -28,21 +28,38 @@ type cam_value =
 and cam_stack = cam_value list
 and cam_env = cam_value list
 
-let string_of_cam_instr = function
-  | CAM_Ldi(_) -> "Ldi"
-  | CAM_Ldb(_) -> "Ldb"
-  | CAM_Access(_) -> "Access"
-  | CAM_Closure(_) -> "Closure"
-  | CAM_Let -> "Let"
-  | CAM_EndLet -> "EndLet"
-  | CAM_Test(_) -> "Test"
-  | CAM_Binop(_) -> "Binop"
-  | CAM_Apply -> "Apply"
-  | CAM_Return -> "Return"
-  | CAM_Ldl -> "List empty"
-  | CAM_Cons -> "List cons"
-  | CAM_Head -> "List head"
-  | CAM_Tail -> "List tail"
+let rec string_of_cam_instr indent instr =
+  let indent_str = String.init indent (fun _ -> ' ') in
+  let sep = "\n" in
+  let string_of_binop = function
+  | CAM_Add -> "Add"
+  | CAM_Sub -> "Sub"
+  | CAM_Mul -> "Mul"
+  | CAM_Eq -> "Eq"
+  in
+  let str =
+    match instr with
+    | CAM_Ldi(i) -> Printf.sprintf "Ldi %d" i
+    | CAM_Ldb(b) -> Printf.sprintf "Ldb %b" b
+    | CAM_Access(i) -> Printf.sprintf "Access %d" i
+    | CAM_Closure(code) ->
+      let inner = List.map (fun instr -> string_of_cam_instr (indent + 1) instr) code |> String.concat sep in
+      Printf.sprintf "Closure begin\n%s\n%sClosure end" inner indent_str
+    | CAM_Let -> "Let"
+    | CAM_EndLet -> "EndLet"
+    | CAM_Test(then_b, else_b) ->
+      let then_inner = List.map (fun instr -> string_of_cam_instr (indent + 1) instr) then_b |> String.concat sep in
+      let else_inner = List.map (fun instr -> string_of_cam_instr (indent + 1) instr) else_b |> String.concat sep in
+      Printf.sprintf "Test then\n%s\n%sTest else\n%s\n%sTest end" then_inner indent_str else_inner indent_str
+    | CAM_Binop(op) -> Printf.sprintf "Binop %s" (string_of_binop op)
+    | CAM_Apply -> "Apply"
+    | CAM_Return -> "Return"
+    | CAM_Ldl -> "List empty"
+    | CAM_Cons -> "List cons"
+    | CAM_Head -> "List head"
+    | CAM_Tail -> "List tail"
+  in
+  String.concat "" [indent_str; str]
 
 let rec access_env index env =
   match env with
@@ -130,5 +147,6 @@ let rec convert_value cam_val =
 let compile e = compile e []
 
 let eval instrs =
-  (* List.iter (fun inst -> Printf.printf "%s\n" (string_of_cam_instr inst)) instrs; *)
+  Printf.printf "CAM instructions:\n";
+  List.iter (fun inst -> Printf.printf "%s\n" (string_of_cam_instr 0 inst)) instrs;
   eval instrs [] [] |> convert_value

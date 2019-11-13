@@ -49,7 +49,7 @@ let rec string_of_zam_instr indent instr =
     | ZAM_Access(i) -> Printf.sprintf "Access %d" i
     | ZAM_Closure(code) ->
       let inner = List.map (fun instr -> string_of_zam_instr (indent + 1) instr) code |> String.concat sep in
-      Printf.sprintf "%sClosure begin\n%s\n%sClosure end" indent_str inner indent_str
+      Printf.sprintf "Closure begin\n%s\n%sClosure end" inner indent_str
     | ZAM_Let -> "Let"
     | ZAM_EndLet -> "EndLet"
     | ZAM_Test(then_b, else_b) ->
