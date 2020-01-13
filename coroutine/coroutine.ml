@@ -1,4 +1,6 @@
 (* originally from https://gist.github.com/keigoi/5860564 *)
+(* modified to work with dune *)
+
 (* Coroutine implementation in OCaml, with Oleg's delimited continuation *)
 (* see http://okmij.org/ftp/continuations/implementations.html#caml-shift *)
 module D = Delimcc

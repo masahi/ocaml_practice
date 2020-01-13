@@ -48,7 +48,7 @@ module Solver = struct
   let solve_puzzle p opset c =
     let rel = fun conf ->
       let moves = p.possible_moves conf in
-      List.map (fun move -> p.move c move) moves
+      List.map (fun move -> p.move conf move) moves
     in
     solve_path' opset rel p.final c
 end
