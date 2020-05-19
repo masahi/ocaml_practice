@@ -16,3 +16,7 @@ let () =
   let w_o = observe w in
   stabilize ();
   Printf.printf "w: %d\n" (Observer.value_exn w_o);
+  Var.set y 59;
+  stabilize ();
+
+  Printf.printf "w: %d\n" (Observer.value_exn w_o);

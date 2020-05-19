@@ -1,14 +1,8 @@
 (executables
- (names power_bench power_offshore)
+ (names power_bench hash_table)
  (ocamlopt_flags (:standard -I +compiler-libs ocamlcommon.cmxa dynlink.cmxa codelib.cmx runnative.cmx))
  (ocamlc_flags (:standard -I +compiler-libs ocamlcommon.cma ocamlbytecomp.cma ocamltoplevel.cma metalib.cma berstart.cmo))
  (libraries
    core_bench
    base
-   llvm
-   llvm.analysis
-   llvm.executionengine
-   llvm.target
-   llvm.scalar_opts
-   llvm_X86
 ))
