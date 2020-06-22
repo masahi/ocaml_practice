@@ -1,5 +1,5 @@
 (executables
- (names power_bench hash_table)
+ (names power_bench hash_table scp08)
  (ocamlopt_flags (:standard -I +compiler-libs ocamlcommon.cmxa dynlink.cmxa codelib.cmx runnative.cmx))
  (ocamlc_flags (:standard -I +compiler-libs ocamlcommon.cma ocamlbytecomp.cma ocamltoplevel.cma metalib.cma berstart.cmo))
  (libraries
