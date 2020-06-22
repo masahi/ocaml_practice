@@ -1,5 +1,25 @@
 open Codelib
 
+type ('p, 'v) monad = 's -> ('s -> 'v -> 'w) -> 'w
+  constraint 'p = <state: 's; answer: 'w; ..>
+
+let ret (a: 'v) : ('p, 'v) monad = fun s k -> k s a
+
+let bind (m: ('p, 'v) monad) (f: 'v -> ('p, 'u) monad) : ('p, 'u) monad
+    = fun s k -> m s (fun s' b -> f b s' k)
+
+let fetch s k = k s s and store v _ k = k v ()
+
+let k0 _ v = v
+let runM m = fun s0 -> m s0 k0
+
+let retN (a: 'v code) : (<answer: 'w code; ..>, 'v code) monad =
+  fun s k -> .<let t = .~a in .~(k s .<t>.)>.
+
+module Let_syntax = struct
+  let (let*) d f = bind d f
+end
+
 let _ =
   let one = .<1>. in
   let plus x y = .<.~x + .~y>. in
@@ -24,3 +44,17 @@ let _ =
   print_code Format.std_formatter (param_code2 plus one); print_newline ();
   let f_cps = Runnative.run (param_code2 plus one) in
   Printf.printf "%f\n" (f_cps 2. 3.)
+
+let _ =
+  let plus x y = .<.~x +. .~y>. and one = .<1.0>. in
+  let open Let_syntax in
+  let param_code3 plus one =
+    let gen x y =
+      let* ce = retN (plus y one) in
+      ret (plus ce (plus x ce))
+    in
+    .<fun x y -> .~(runM (gen .<x>. .<y>.) ())>. in
+
+  print_code Format.std_formatter (param_code3 plus one); print_newline ();
+  let f_monad = Runnative.run (param_code3 plus one) in
+  Printf.printf "%f\n" (f_monad 2. 3.)
