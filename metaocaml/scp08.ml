@@ -16,6 +16,11 @@ let runM m = fun s0 -> m s0 k0
 let retN (a: 'v code) : (<answer: 'w code; ..>, 'v code) monad =
   fun s k -> .<let t = .~a in .~(k s .<t>.)>.
 
+let ifL test th el = ret .<if .~test then .~th else .~el>.
+
+let ifM test th el = fun s k ->
+  k s .<if .~test then .~(th s k0) else .~(el s k0)>.
+
 module Let_syntax = struct
   let (let*) d f = bind d f
 end
@@ -58,3 +63,11 @@ let _ =
   print_code Format.std_formatter (param_code3 plus one); print_newline ();
   let f_monad = Runnative.run (param_code3 plus one) in
   Printf.printf "%f\n" (f_monad 2. 3.)
+
+(* let _ =
+ *   let ifM' test th el =
+ *     let* testc = test in
+ *     let* thc = tc in
+ *     let* elc = el in
+ *     ifL testc thc elc in
+ *   print_string ""; *)
