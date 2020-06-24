@@ -219,7 +219,7 @@ module P_GADT = struct
 
   let leq (e1: int repr) (e2: int repr) =
     match e1, e2 with
-    | VI(i1), VI(i2) -> VB(i1 <= i2)
+    | VI(i1), VI(i2) -> VB(i1 < i2)
     | _, _ -> Dyn(C.leq (abstr(e1)) (abstr(e2)))
 
   let if_: type a. bool repr -> (unit -> a repr) -> (unit -> a repr) -> a repr = fun be et ee ->
@@ -248,6 +248,7 @@ module EXR = EX(R)
 module EXL = EX(L)
 module EXC = EX(C)
 module EXP = EX_PE(P)
+module EXP_GADT = EX(P_GADT)
 
 let _ =
   Printf.printf "%d\n" (EXR.testpowerfix7 2);
@@ -256,7 +257,22 @@ let _ =
   Printf.printf "\n%d\n" (fact 2)
 
 let _ =
-  (* Printf.printf "%d\n" (EXR.testpowerfix7 2); *)
   print_code Format.std_formatter (EXP.testpowerfix7.dy);
   let fact = Runnative.run (EXP.testpowerfix7.dy) in
   Printf.printf "\n%d\n" (fact 2)
+
+let _ =
+  match EXP_GADT.testpowerfix7 with
+  | VF(f) ->
+    let res = (f (P_GADT.int 2)) in
+    begin match res with
+      | VI(i) -> Printf.printf "%d\n" i;
+      | Dyn(c) ->
+        print_code Format.std_formatter c;
+        let fact = Runnative.run c in
+        Printf.printf "\n%d\n" fact
+    end
+  | Dyn(c) ->
+    print_code Format.std_formatter c;
+    let fact = Runnative.run c in
+    Printf.printf "\n%d\n" (fact 2)
