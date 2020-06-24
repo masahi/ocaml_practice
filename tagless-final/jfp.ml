@@ -34,6 +34,8 @@ module EX(S: Symantics) = struct
 
   let test1 () = app (lam (fun x -> x)) (bool true)
 
+  let test2 () = lam (fun n -> app (lam (fun x -> x)) n)
+
   let testpowerfix () =
     lam (fun x -> fix (fun self -> lam (fun n ->
         if_ (leq n (int 1)) (fun () -> (int 1))
@@ -97,8 +99,7 @@ module type Symantics_PE = sig
 
 end
 
-module P =
-struct
+module P = struct
   type ('sv,'dv) repr = {st: 'sv option; dy: 'dv code}
   let abstr {dy = x; _} = x
   let pdyn x = {st = None; dy = x}
@@ -108,26 +109,25 @@ struct
   let bool (x:bool) = {st = Some (R.bool x);
                        dy = C.bool x}
 
-  (* generic build - takes a repr constructor, an interpreter function
-     and a compiler function (all binary) and builds a PE version *)
-  let build cast f1 f2 = function
-    | {st = Some m; _}, {st = Some n; _} -> cast (f1 m n)
-    | e1, e2 -> pdyn (f2 (abstr e1) (abstr e2))
-  (* same as 'build' but takes care of the neutral element (e) simplification
-     allowed via a monoid structure which is implicitly present *)
-  let monoid cast one f1 f2 = function
-    | {st = Some e'; _}, e when e' = one -> e
-    | e, {st = Some e'; _} when e' = one -> e
-    | ee -> build cast f1 f2 ee
-  (* same as above but for a ring structure instead of monoid *)
-  let ring cast zero one f1 f2 = function
-    | ({st = Some e'; _} as e), _ when e' = zero -> e
-    | _, ({st = Some e'; _} as e) when e' = zero -> e
-    | ee -> monoid cast one f1 f2 ee
+  let add e1 e2 =
+    match e1, e2 with
+    | {st = Some 0; _}, e | e, {st = Some 0; _} -> e
+    | {st = Some m; _}, {st = Some n; _} -> int (R.add m n)
+    | _ -> pdyn (C.add (abstr e1) (abstr e2))
 
-  let add e1 e2 = monoid int 0 R.add C.add (e1,e2)
-  let mul e1 e2 = ring int 0 1 R.mul C.mul (e1,e2)
-  let leq e1 e2 = build bool R.leq C.leq (e1,e2)
+  let mul e1 e2 =
+    match e1, e2 with
+    | {st = Some 0; _}, _ | _, {st = Some 0; _} -> int 0
+    | {st = Some 1; _}, e -> e
+    | e, {st = Some 1; _} -> e
+    | {st = Some m; _}, {st = Some n; _} -> int (R.mul m n)
+    | _ -> pdyn (C.mul (abstr e1) (abstr e2))
+
+  let leq e1 e2 =
+    match e1, e2 with
+    | {st = Some m; _}, {st = Some n; _} -> bool (R.leq m n)
+    | _ -> pdyn (C.leq (abstr e1) (abstr e2))
+
   let if_ eb et ee = match eb with
     | {st = Some b; _} -> if b then et () else ee ()
     | _ -> pdyn (C.if_ (abstr eb)
@@ -142,11 +142,6 @@ struct
     | {st = Some f; _} -> f ea
     | _ -> pdyn (C.app (abstr ef) (abstr ea))
 
-   (*
-     For now, to avoid divergence at the PE stage, we residualize.
-     Actually, we unroll the fixpoint exactly once, and then
-     residualize
-   *)
   (* let fix f = f (pdyn (C.fix (fun x -> abstr (f (pdyn x)))))
   *)
   let fix f = let fdyn = C.fix (fun x -> abstr (f (pdyn x)))
@@ -183,17 +178,10 @@ module P_GADT = struct
     | VF(f) -> f arg
     | Dyn(f) -> Dyn (C.app f (abstr arg))
 
-  (* val fix : ('x -> 'x) -> (('a -> 'b) repr as 'x)   *)
-  (* let fix f = let fdyn = C.fix (fun x -> abstr (f (pdyn x)))
-   *   in let rec self = function
-   *       | {st = Some _; _} as e -> app (f (lam self)) e
-   *       | e -> pdyn (C.app fdyn (abstr e))
-   *   in {st = Some self; dy = fdyn} *)
-
   let fix: type a b. ((a -> b) repr -> (a -> b) repr) -> (a -> b) repr = fun f ->
     let fdyn = C.fix (fun x -> abstr (f (pdyn x))) in
     let rec self: a repr -> b repr = fun arg ->
-      match arg with
+      match arg with (* cannot make gadt or pattern until 4.07*)
      | VI(_) -> app (f (lam self)) arg
      | VB(_) -> app (f (lam self)) arg
      | VF(_) -> app (f (lam self)) arg
@@ -226,9 +214,7 @@ module P_GADT = struct
     match be with
     | VB(b) -> if b then et () else ee ()
     | _ -> Dyn (C.if_ (abstr be) (fun () -> (abstr (et ()))) (fun () -> (abstr (ee ()))))
-  (*
-   * val fix : ('x -> 'x) -> (('a -> 'b) repr as 'x)
- *)
+
 end
 
 module EX_PE(S: Symantics_PE) = struct
@@ -236,6 +222,9 @@ module EX_PE(S: Symantics_PE) = struct
 
   let test1 () = app (lam (fun x -> x)) (bool true)
 
+  let test2 () = lam (fun n -> app (lam (fun x -> x)) n)
+
+  (* let test2_bug  = lam (fun n -> app (lam (fun x -> x)) n) *)
   let testpowerfix () =
     lam (fun x -> fix (fun self -> lam (fun n ->
         if_ (leq n (int 1)) (fun () -> (int 1))
@@ -257,6 +246,7 @@ let _ =
   Printf.printf "\n%d\n" (fact 2)
 
 let _ =
+  print_code Format.std_formatter ((EXP.test2 ()).dy); print_newline();
   print_code Format.std_formatter (EXP.testpowerfix7.dy);
   let fact = Runnative.run (EXP.testpowerfix7.dy) in
   Printf.printf "\n%d\n" (fact 2)
@@ -264,15 +254,13 @@ let _ =
 let _ =
   match EXP_GADT.testpowerfix7 with
   | VF(f) ->
-    let res = (f (P_GADT.int 2)) in
-    begin match res with
-      | VI(i) -> Printf.printf "%d\n" i;
-      | Dyn(c) ->
-        print_code Format.std_formatter c;
-        let fact = Runnative.run c in
-        Printf.printf "\n%d\n" fact
+    let cde = P_GADT.abstr (VF f) in
+    print_code Format.std_formatter cde; print_newline();
+    begin match f (P_GADT.int 2) with
+      | VI(i) -> Printf.printf "VI(i) = %d\n" i;
+      | Dyn(_) -> failwith "cannot happen"
     end
   | Dyn(c) ->
     print_code Format.std_formatter c;
     let fact = Runnative.run c in
-    Printf.printf "\n%d\n" (fact 2)
+    Printf.printf "\n ((Dyn c) 2) = %d\n" (fact 2)
