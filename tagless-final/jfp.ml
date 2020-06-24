@@ -111,36 +111,36 @@ struct
   (* generic build - takes a repr constructor, an interpreter function
      and a compiler function (all binary) and builds a PE version *)
   let build cast f1 f2 = function
-  | {st = Some m; _}, {st = Some n; _} -> cast (f1 m n)
-  | e1, e2 -> pdyn (f2 (abstr e1) (abstr e2))
+    | {st = Some m; _}, {st = Some n; _} -> cast (f1 m n)
+    | e1, e2 -> pdyn (f2 (abstr e1) (abstr e2))
   (* same as 'build' but takes care of the neutral element (e) simplification
      allowed via a monoid structure which is implicitly present *)
   let monoid cast one f1 f2 = function
-  | {st = Some e'; _}, e when e' = one -> e
-  | e, {st = Some e'; _} when e' = one -> e
-  | ee -> build cast f1 f2 ee
+    | {st = Some e'; _}, e when e' = one -> e
+    | e, {st = Some e'; _} when e' = one -> e
+    | ee -> build cast f1 f2 ee
   (* same as above but for a ring structure instead of monoid *)
   let ring cast zero one f1 f2 = function
-  | ({st = Some e'; _} as e), _ when e' = zero -> e
-  | _, ({st = Some e'; _} as e) when e' = zero -> e
-  | ee -> monoid cast one f1 f2 ee
+    | ({st = Some e'; _} as e), _ when e' = zero -> e
+    | _, ({st = Some e'; _} as e) when e' = zero -> e
+    | ee -> monoid cast one f1 f2 ee
 
   let add e1 e2 = monoid int 0 R.add C.add (e1,e2)
   let mul e1 e2 = ring int 0 1 R.mul C.mul (e1,e2)
   let leq e1 e2 = build bool R.leq C.leq (e1,e2)
   let if_ eb et ee = match eb with
-  | {st = Some b; _} -> if b then et () else ee ()
-  | _ -> pdyn (C.if_ (abstr eb)
-                     (fun () -> abstr (et ()))
-                     (fun () -> abstr (ee ())))
+    | {st = Some b; _} -> if b then et () else ee ()
+    | _ -> pdyn (C.if_ (abstr eb)
+                   (fun () -> abstr (et ()))
+                   (fun () -> abstr (ee ())))
 
   let lam f =
-  {st = Some f;
-   dy = C.lam (fun x -> abstr (f (pdyn x)))}
+    {st = Some f;
+     dy = C.lam (fun x -> abstr (f (pdyn x)))}
 
   let app ef ea = match ef with
-  | {st = Some f; _} -> f ea
-  | _ -> pdyn (C.app (abstr ef) (abstr ea))
+    | {st = Some f; _} -> f ea
+    | _ -> pdyn (C.app (abstr ef) (abstr ea))
 
    (*
      For now, to avoid divergence at the PE stage, we residualize.
@@ -155,6 +155,80 @@ struct
         | e -> pdyn (C.app fdyn (abstr e))
     in {st = Some self; dy = fdyn}
 
+end
+
+module P_GADT = struct
+  type _ repr =
+    | VI: int -> int repr
+    | VB: bool -> bool repr
+    | VF: ('a repr -> 'b repr) -> ('a -> 'b) repr
+    | Dyn: 'a C.repr -> 'a repr
+
+  let pdyn x = Dyn x
+
+  let rec abstr: type a. a repr -> a C.repr = function
+    | VI(v) -> C.int v
+    | VB(b) -> C.bool b
+    | VF(f) -> C.lam (fun x -> abstr (f (pdyn x)))
+    | Dyn(d) -> d
+
+  let int i = VI i
+
+  let bool b = VB b
+
+  let lam f = VF f
+
+  let app: type a b. (a -> b) repr -> a repr -> b repr = fun func arg ->
+    match func with
+    | VF(f) -> f arg
+    | Dyn(f) -> Dyn (C.app f (abstr arg))
+
+  (* val fix : ('x -> 'x) -> (('a -> 'b) repr as 'x)   *)
+  (* let fix f = let fdyn = C.fix (fun x -> abstr (f (pdyn x)))
+   *   in let rec self = function
+   *       | {st = Some _; _} as e -> app (f (lam self)) e
+   *       | e -> pdyn (C.app fdyn (abstr e))
+   *   in {st = Some self; dy = fdyn} *)
+
+  let fix: type a b. ((a -> b) repr -> (a -> b) repr) -> (a -> b) repr = fun f ->
+    let fdyn = C.fix (fun x -> abstr (f (pdyn x))) in
+    let rec self: a repr -> b repr = fun arg ->
+      match arg with
+     | VI(_) -> app (f (lam self)) arg
+     | VB(_) -> app (f (lam self)) arg
+     | VF(_) -> app (f (lam self)) arg
+     | Dyn(c) -> Dyn (C.app fdyn c)
+    in
+    lam self
+
+  let add (e1: int repr) (e2: int repr) =
+    match e1, e2 with
+    | VI(0), _ -> e2
+    | _, VI(0) -> e1
+    | VI(i1), VI(i2) -> VI(i1 + i2)
+    | _, _ -> Dyn(C.add (abstr(e1)) (abstr(e2)))
+
+  let mul (e1: int repr) (e2: int repr) =
+    match e1, e2 with
+    | VI(0), _ -> int 0
+    | _, VI(0) -> int 0
+    | VI(1), _ -> e2
+    | _, VI(1) -> e1
+    | VI(i1), VI(i2) -> VI(i1 * i2)
+    | _, _ -> Dyn(C.mul (abstr(e1)) (abstr(e2)))
+
+  let leq (e1: int repr) (e2: int repr) =
+    match e1, e2 with
+    | VI(i1), VI(i2) -> VB(i1 <= i2)
+    | _, _ -> Dyn(C.leq (abstr(e1)) (abstr(e2)))
+
+  let if_: type a. bool repr -> (unit -> a repr) -> (unit -> a repr) -> a repr = fun be et ee ->
+    match be with
+    | VB(b) -> if b then et () else ee ()
+    | _ -> Dyn (C.if_ (abstr be) (fun () -> (abstr (et ()))) (fun () -> (abstr (ee ()))))
+  (*
+   * val fix : ('x -> 'x) -> (('a -> 'b) repr as 'x)
+ *)
 end
 
 module EX_PE(S: Symantics_PE) = struct
