@@ -1,16 +1,17 @@
 open Codelib
-(* let varZ env = fst env
- * let varS vp env = vp (snd env)
- *
- * let b (bv:bool) env = bv
- *
- * let lam e env = fun x -> e (x, env)
- *
- * let app e1 e2 env = (e1 env) (e2 env)
- *
- * let testf1 = app (lam varZ) (b true)
- *
- * let testf3 = app (lam (varS varZ)) (b true) *)
+let varZ env = fst env
+let varS vp env = vp (snd env)
+
+let b (bv:bool) _ = bv
+
+let lam e env = fun x -> e (x, env)
+
+let app e1 e2 env = (e1 env) (e2 env)
+
+let testf1 () = app (lam varZ) (b true)
+(*value restriction?*)
+
+let testf3 () = app (lam (varS varZ)) (b true)
 
 
 module type Symantics = sig
@@ -99,7 +100,7 @@ module type Symantics_PE = sig
 
 end
 
-module P = struct
+module P(R: Symantics with type 'a repr = 'a)(C: Symantics with type 'a repr = 'a code) = struct
   type ('sv,'dv) repr = {st: 'sv option; dy: 'dv code}
   let abstr {dy = x; _} = x
   let pdyn x = {st = None; dy = x}
@@ -142,8 +143,7 @@ module P = struct
     | {st = Some f; _} -> f ea
     | _ -> pdyn (C.app (abstr ef) (abstr ea))
 
-  (* let fix f = f (pdyn (C.fix (fun x -> abstr (f (pdyn x)))))
-  *)
+  (* let fix f = f (pdyn (C.fix (fun x -> abstr (f (pdyn x))))) *)
   let fix f = let fdyn = C.fix (fun x -> abstr (f (pdyn x)))
     in let rec self = function
         | {st = Some _; _} as e -> app (f (lam self)) e
@@ -152,7 +152,7 @@ module P = struct
 
 end
 
-module P_GADT = struct
+module P_GADT(R: Symantics with type 'a repr = 'a)(C: Symantics with type 'a repr = 'a code) = struct
   type _ repr =
     | VI: int -> int repr
     | VB: bool -> bool repr
@@ -181,11 +181,11 @@ module P_GADT = struct
   let fix: type a b. ((a -> b) repr -> (a -> b) repr) -> (a -> b) repr = fun f ->
     let fdyn = C.fix (fun x -> abstr (f (pdyn x))) in
     let rec self: a repr -> b repr = fun arg ->
-      match arg with (* cannot make gadt or pattern until 4.07*)
-     | VI(_) -> app (f (lam self)) arg
-     | VB(_) -> app (f (lam self)) arg
-     | VF(_) -> app (f (lam self)) arg
-     | Dyn(c) -> Dyn (C.app fdyn c)
+      match arg with (* cannot make gadt or pattern until 4.08*)
+      | VI(_) -> app (f (lam self)) arg
+      | VB(_) -> app (f (lam self)) arg
+      | VF(_) -> app (f (lam self)) arg
+      | Dyn(c) -> Dyn (C.app fdyn c)
     in
     lam self
 
@@ -224,7 +224,6 @@ module EX_PE(S: Symantics_PE) = struct
 
   let test2 () = lam (fun n -> app (lam (fun x -> x)) n)
 
-  (* let test2_bug  = lam (fun n -> app (lam (fun x -> x)) n) *)
   let testpowerfix () =
     lam (fun x -> fix (fun self -> lam (fun n ->
         if_ (leq n (int 1)) (fun () -> (int 1))
@@ -234,33 +233,33 @@ module EX_PE(S: Symantics_PE) = struct
 end
 
 module EXR = EX(R)
-module EXL = EX(L)
 module EXC = EX(C)
-module EXP = EX_PE(P)
-module EXP_GADT = EX(P_GADT)
+module EXP = EX_PE(P(R)(C))
+module P_GADT' = P_GADT(R)(C)
+module EXP_GADT = EX(P_GADT')
 
 let _ =
   Printf.printf "%d\n" (EXR.testpowerfix7 2);
   print_code Format.std_formatter (EXC.testpowerfix7);
-  let fact = Runnative.run (EXC.testpowerfix7) in
-  Printf.printf "\n%d\n" (fact 2)
+  let power7 = Runnative.run (EXC.testpowerfix7) in
+  Printf.printf "\n%d\n" (power7 2)
 
 let _ =
   print_code Format.std_formatter ((EXP.test2 ()).dy); print_newline();
   print_code Format.std_formatter (EXP.testpowerfix7.dy);
-  let fact = Runnative.run (EXP.testpowerfix7.dy) in
-  Printf.printf "\n%d\n" (fact 2)
+  let power7 = Runnative.run (EXP.testpowerfix7.dy) in
+  Printf.printf "\n%d\n" (power7 2)
 
 let _ =
   match EXP_GADT.testpowerfix7 with
   | VF(f) ->
-    let cde = P_GADT.abstr (VF f) in
+    let cde = P_GADT'.abstr (VF f) in
     print_code Format.std_formatter cde; print_newline();
-    begin match f (P_GADT.int 2) with
+    begin match f (P_GADT'.int 2) with
       | VI(i) -> Printf.printf "VI(i) = %d\n" i;
       | Dyn(_) -> failwith "cannot happen"
     end
   | Dyn(c) ->
     print_code Format.std_formatter c;
-    let fact = Runnative.run c in
-    Printf.printf "\n ((Dyn c) 2) = %d\n" (fact 2)
+    let power7 = Runnative.run c in
+    Printf.printf "\n ((Dyn c) 2) = %d\n" (power7 2)
