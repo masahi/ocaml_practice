@@ -292,6 +292,36 @@ let peval6 p env fenv =
   in
   inner p env fenv init_k
 
+let rec eval7 e env fenv =
+  match e with
+  | Int i -> .<i>.
+  | Var s -> env s
+  | App (s,e2) ->
+    .<let x = .~(eval7 e2 env fenv) in
+      .~(fenv s .<x>.)
+    >.
+  | Add (e1,e2) -> .<.~(eval7 e1 env fenv) + .~(eval7 e2 env fenv)>.
+  | Sub (e1,e2) -> .<.~(eval7 e1 env fenv) - .~(eval7 e2 env fenv)>.
+  | Mul (e1,e2) -> .<.~(eval7 e1 env fenv) * .~(eval7 e2 env fenv)>.
+  | Div (e1,e2) -> .<.~(eval7 e1 env fenv) / .~(eval7 e2 env fenv)>.
+  | Ifz (e1,e2,e3) ->
+    .<if .~(eval7 e1 env fenv) = 0 then .~(eval7 e2 env fenv)
+    else .~(eval7 e3 env fenv)>.
+
+let rec repeat n f =
+  if n = 0 then f else fun x -> f (repeat (n-1) f x)
+
+let rec peval7 p env fenv =
+  match p with
+  | Program ([], e) -> eval7 e env fenv
+  | Program (Declaration (s1, s2, e1) :: tl, e) ->
+    .<let rec f x =
+        .~(let body cf x =
+             eval7 e1 (ext env s2 x) (ext fenv s1 cf) in
+           repeat 1 body (fun y -> .<f .~y>.) .<x>.) in
+
+    .~(peval7 (Program(tl, e)) env (ext fenv s1 (fun y -> .<f .~y>.)))>.
+
 let _ =
   let ret = peval1 fact env0 fenv0 in
   Printf.printf "%d\n" ret;
@@ -305,17 +335,22 @@ let _ =
   Printf.printf "%d\n" ret;
   let cde = peval6 fact env0 fenv0 in
   Printf.printf "%d\n" (Runnative.run cde);
+  let cde = peval7 fact env0 fenv0 in
+  Printf.printf "%d\n" (Runnative.run cde);
 
   let open Codelib in
   let staged1_cde = .<fun () -> .~(peval2 fact env0 fenv0)>. in
   let staged2_cde = .<fun () -> .~(peval4 fact env0 fenv0)>. in
   let staged3_cde = .<fun () -> .~(peval6 fact env0 fenv0)>. in
+  let staged4_cde = .<fun () -> .~(peval7 fact env0 fenv0)>. in
   print_code Format.std_formatter staged1_cde; print_newline();
   print_code Format.std_formatter staged2_cde; print_newline();
   print_code Format.std_formatter staged3_cde; print_newline();
+  print_code Format.std_formatter staged4_cde; print_newline();
   let staged1_f = Runnative.run staged1_cde in
   let staged2_f = Runnative.run staged2_cde in
   let staged3_f = Runnative.run staged3_cde in
+  let staged4_f = Runnative.run staged4_cde in
 
   let open Core_bench in
   [Bench.Test.create ~name:"unstaged1" (fun () -> ignore(peval1 fact env0 fenv0));
@@ -324,5 +359,6 @@ let _ =
    Bench.Test.create ~name:"staged2" (fun () -> ignore(staged2_f ()));
    Bench.Test.create ~name:"unstaged3" (fun () -> ignore(peval5 fact env0 fenv0));
    Bench.Test.create ~name:"staged3" (fun () -> ignore(staged3_f ()));
+   Bench.Test.create ~name:"staged4" (fun () -> ignore(staged4_f ()));
   ]
   |> Bench.bench
