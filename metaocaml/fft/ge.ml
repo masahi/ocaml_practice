@@ -266,7 +266,7 @@ module type DETERMINANT = sig
   type tdet = C.Dom.v ref
   type 'a lstate
   type 'pc pc_constraint = unit
-    constraint 'pc = <state : [> `TDet of 'a lstate ];  ..>
+    constraint 'pc = <state : [> `TDet of 'a lstate ]; classif : 'a; ..>
   type ('pc,'v) lm = ('pc,'v) cmonad
     constraint _  = 'pc pc_constraint
   type ('pc,'v) om = ('pc,'v) omonad
@@ -277,9 +277,9 @@ module type DETERMINANT = sig
   val decl : unit -> 'b nm (* no code is generated *)
   val upd_sign  : unit -> ('b,unit) om
   val zero_sign : unit -> ('b,unit) lm
-  val acc_magn  : ('a,C.Dom.v) abstract -> ('b,unit) lm
+  val acc_magn  : ('a,C.Dom.v) abstract -> (<classif : 'a; ..>,unit) lm
   val get_magn  : unit -> ('b,tdet) lm
-  val set_magn  : ('a,C.Dom.v) abstract -> ('b,unit) lm
+  val set_magn  : ('a,C.Dom.v) abstract -> (<classif : 'a; ..>,unit) lm
   val fin       : unit -> ('b,C.Dom.v) lm
 end
 
@@ -323,7 +323,7 @@ module NoDet : DETERMINANT =
   let set_magn _ = unitL
   let fin () = failwith "Determinant is needed but not computed"
   type 'pc pc_constraint = unit
-    constraint 'pc = <state : [> `TDet of 'a lstate ]; ..>
+    constraint 'pc = <state : [> `TDet of 'a lstate ]; classif : 'a;..>
   type ('pc,'v) lm = ('pc,'v) cmonad
     constraint _  = 'pc pc_constraint
   type ('pc,'v) om = ('pc,'v) omonad
@@ -378,6 +378,247 @@ module AbstractDet : DETERMINANT =
       ifM (Logic.equalL (liftGet sign) Idx.zero) (ret zeroL)
       (ifM (Logic.equalL (liftGet sign) Idx.one) (ret (liftGet magn))
           (ret (uminusL (liftGet magn))))
+end
+
+module type UPDATE =
+        functor(D:DETERMINANT) -> sig
+        type 'a in_val = 'a C.Dom.vc
+        val update :
+            'a in_val -> 'a in_val -> 'a in_val -> 'a in_val ->
+          ('a in_val -> ('a, unit) abstract) ->
+          ('a, C.Dom.v ref) abstract ->
+          (<classif : 'a; ..>, unit) cmonad
+        val update_det : 'a in_val -> (<classif : 'a; ..>,unit) D.lm
+(* this is only needed if we try to deal with FractionFree LU,
+   which is really tough, especially since the L Matrix still has
+   to be over the fraction field, which we don't have available.
+        val update_lower :
+            'a in_val -> 'a in_val -> 'a in_val -> 'a in_val ->
+          ('a, C.Dom.v ref) abstract -> ('a, C.Dom.v, 's, 'w) cmonad *)
+        val upd_kind : update_kind
+end
+
+module GE = struct
+
+(* What is the update formula? *)
+module DivisionUpdate(Det:DETERMINANT) =
+  struct
+  open C.Dom
+  type 'a in_val = 'a vc
+  let update bic brc brk bik setter _ =
+      let* y = ret (bik -^ ((divL bic brc) *^ brk)) in
+      ret (setter (applyMaybe normalizerL y))
+  let update_det v = Det.acc_magn v
+(*let update_lower bic brc _ _ _ = perform
+      y <-- ret (divL bic brc);
+      ret (applyMaybe normalizerL y) *)
+  let upd_kind = DivisionBased
+  (* Initialization: check the preconditions of instantiation of this struct*)
+  let _ = ensure (C.Dom.kind = Domains_sig.Domain_is_Field)
+      "Cannot do Division in a non-field"
+end
+
+module FractionFreeUpdate(Det:DETERMINANT) = struct
+  open C.Dom
+  type 'a in_val = 'a vc
+  let update bic brc brk bik setter d =
+      let* z = ret ((bik *^ brc) -^ (brk *^ bic)) in
+      let* t = ret (applyMaybe normalizerL z) in
+      let* ov = ret (divL t (liftGet d)) in
+      ret (setter ov)
+  let update_det v = Det.set_magn v
+(*let update_lower bic brc lrk lik d = perform
+      rat <-- ret (liftGet d);
+      z <-- ret (divL ((rat *^ lik) +^ (bic *^ lrk)) brc);
+      t <-- ret (applyMaybe normalizerL z);
+      ret t *)
+  let upd_kind = FractionFree
+end
+
+module TrackLower =
+  struct
+  type 'a lstate = ('a, C.contr) abstract
+  type ('pc,'v) lm = ('pc,'v) cmonad
+    constraint 'pc = <state : [> `TLower of 'a lstate ]; classif : 'a; ..>
+  let ip = (fun x -> `TLower x), (function `TLower x -> Some x | _ -> None),
+           "TrackLower"
+end
+
+module SeparateLower = struct
+  include TrackLower
+  let decl c =
+      let* udecl = retN c in
+      let* _ = mo_extend ip udecl in
+      ret udecl
+  (* also need to 'set' lower! *)
+  let updt mat row col defval nv = Some(
+      let* lower = mo_lookup ip in
+      let* l1 = ret (C.col_head_set lower row col nv) in
+      let* l2 = ret (C.col_head_set mat row col defval) in
+      ret (seq l1 l2) )
+  let fin () = mo_lookup ip
+  let wants_pack = false
+end
+
+module PackedLower = struct
+  include TrackLower
+  let decl c =
+      let* udecl = ret c in
+      let* _ = mo_extend ip udecl in
+      ret udecl
+  let updt  _ _ _ _ _ = None
+  let fin () = mo_lookup ip
+  let wants_pack = true
+end
+
+module NoLower = struct
+  include TrackLower
+  let decl c = ret c
+  let updt mat row col defval _ =
+      Some (ret (C.col_head_set mat row col defval))
+  let fin () = failwith "Lower matrix L is needed but not computed"
+  let wants_pack = false
+end
+
+module type INPUT = sig
+    type inp
+    val get_input : ('a, inp) abstract ->
+    (<classif : 'a; ..>, ('a, C.contr) abstract * ('a, int) abstract * bool)
+   monad
+end
+
+(* What is the input *)
+module InpJustMatrix = struct
+    type inp   = C.contr
+    let get_input a = ret (a, C.dim2 a, false)
+end
+
+module InpMatrixMargin = struct
+    type inp   = C.contr * int
+    let get_input a =
+        let* (b,c) = ret (liftPair a) in
+        ret (b, c, true)
+end
+
+module RowPivot(Det: DETERMINANT)(P: TRACKPIVOT)(L: LOWER) =
+struct
+   (* If wants_pack, then we cannot optimize *)
+   let optim x = if L.wants_pack then None else Some x
+   let findpivot mat pos =
+       let* pivot = retN (liftRef Maybe.none ) in
+       (* If no better_than procedure defined, we just search for
+      non-zero element. Any non-zero element is a good pivot.
+      If better_than is defined, we search then for the best element *)
+       seqM
+        (match (C.Dom.better_thanL) with
+         Some sel ->
+              Iters.row_iter mat.matrix pos.colpos pos.rowpos
+          (Idx.pred mat.numrow) C.getL (fun j bjc ->
+              whenM (Logic.notequalL bjc C.Dom.zeroL )
+                  (matchM (liftGet pivot)
+                    (fun pv ->
+
+                      let* (_,bic) = ret (liftPair pv) in
+                      whenM (sel bic bjc)
+                        (assignM pivot (Maybe.just
+                                     (Tuple.tup2 j bjc))))
+                     (assignM pivot (Maybe.just
+                                  (Tuple.tup2 j bjc))))
+              ) UP
+         | None ->
+
+            let* brc = retN (C.row_head mat.matrix pos.rowpos pos.colpos) in
+            ifM (Logic.notequalL brc C.Dom.zeroL)
+              (* the current element is good enough *)
+              (assignM pivot (Maybe.just (Tuple.tup2 pos.rowpos brc)))
+              (let traverse = fun o j ->
+                  whenM (Idx.less j mat.numrow)
+                    (
+                        let* bjc = retN (C.getL mat.matrix j pos.colpos) in
+                        ifM (Logic.equalL bjc C.Dom.zeroL)
+                            (applyM o (Idx.succ j))
+                            (assignM pivot (Maybe.just
+                                (Tuple.tup2 j bjc)))) in
+              (genrecloop traverse (Idx.succ pos.rowpos)))
+         )
+         (matchM (liftGet pivot)
+                (fun pv ->
+                     let* (i,bic) = ret (liftPair pv) in
+                     seqM (whenM (Logic.notequalL i pos.rowpos) (
+                            let* s1 = ret (C.swap_rows_stmt mat.matrix (optim pos.colpos) pos.rowpos i) in
+                            let* s2 =  Det.upd_sign () in
+                            let* s3 = ret (optSeq s1 s2) in
+                            let* s4 = P.add (P.rowrep i pos.rowpos ) in
+                            ret (optSeq s3 s4)
+                           ))
+                          (ret (Maybe.just bic)))
+                (ret Maybe.none))
+end
+
+module FullPivot(Det: DETERMINANT)(P: TRACKPIVOT)(L: LOWER) =
+struct
+   (* If wants_pack, then we cannot optimize *)
+   let optim x = if L.wants_pack then None else Some x
+   let findpivot mat pos =
+       let* pivot = retN (liftRef Maybe.none ) in
+       (* this is not really a row/column iteration, this is a
+          a full-matrix iteration, and should be coded as such *)
+       seqM (loopM pos.rowpos (Idx.pred mat.numrow) (fun j ->
+              loopM pos.colpos (Idx.pred mat.numcol) (fun k ->
+
+              let* bjk = retN (C.getL mat.matrix j k) in
+              whenM (Logic.notequalL bjk C.Dom.zeroL)
+              (match (C.Dom.better_thanL) with
+              | Some sel ->
+                  (matchM (liftGet pivot)
+                    (fun pv ->
+
+                      let* (_,_,brc) = ret (liftPPair pv) in
+                      whenM (sel brc bjk)
+                        (assignM pivot (Maybe.just
+                            (Tuple.tup2 (Tuple.tup2 j k) bjk))))
+                     (assignM pivot (Maybe.just
+                            (Tuple.tup2 (Tuple.tup2 j k) bjk))))
+              | None ->
+                  (assignM pivot (Maybe.just (
+                      Tuple.tup2 (Tuple.tup2 j k) bjk)))
+              )) UP ) UP )
+              (* finished the loop *)
+              (matchM (liftGet pivot)
+                  (fun pv ->
+                     let* (pr,pc,brc) = ret (liftPPair pv) in
+                     seqM
+                         (whenM (Logic.notequalL pc pos.colpos) (
+                           let* s1 = ret (C.swap_cols_stmt mat.matrix pos.colpos pc) in
+                           let* s2 = Det.upd_sign () in
+                           let* s3 = ret (optSeq s1 s2) in
+                           let* s4 = P.add (P.colrep pc pos.rowpos ) in
+                           ret (optSeq s3 s4)))
+                       (seqM
+                         (whenM (Logic.notequalL pr pos.rowpos) (
+                           let* s1 = ret (C.swap_rows_stmt mat.matrix (optim pos.colpos) pos.rowpos pc) in
+                           let* s2 = Det.upd_sign () in
+                           let* s3 = ret (optSeq s1 s2) in
+                           let* s4 = P.add (P.rowrep pr pos.rowpos ) in
+                           ret (optSeq s3 s4)))
+                         (ret (Maybe.just brc))))
+                  (ret Maybe.none))
+end
+
+module NoPivot(Det: DETERMINANT)(P: TRACKPIVOT)(L: LOWER) =
+struct
+   (* In this case, we assume diagonal dominance, and so
+      just take the diagonal as ``pivot'' *)
+   let findpivot mat pos =
+       ret (Maybe.just (C.row_head mat.matrix pos.rowpos pos.colpos))
+end
+
+module type OUTPUTDEP = sig
+    module PivotRep : PIVOTKIND
+    module Det      : DETERMINANT
+end
+
+
 end
 
 end
