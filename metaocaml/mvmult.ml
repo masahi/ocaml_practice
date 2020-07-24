@@ -2,7 +2,7 @@ open Codelib
 
 open Ring
 open Vector
-(* open Lifts *)
+open Lifts
 
 
 module type VECR = sig
@@ -75,7 +75,6 @@ module VecRDyn(T: sig type t end) = struct
         sum := .~(plus .<!sum>. (body .<i>.))
       done;
       !sum>.
-
 end
 
 let mvmult_c : (float array -> float array array -> float array -> unit) code =
@@ -124,4 +123,157 @@ let _ =
   let vout = Array.make 5 0.0 in
   (Runnative.run (mvmult_nc 5 5)) vout a v1;
   print_code Format.std_formatter (mvmult_nc 5 5); print_newline();
+  Array.iter (fun v -> Printf.printf "%f\n" v ) vout
+
+type 'a pv = Sta of 'a | Dyn of 'a code
+
+module Dyn(L:lift) = struct
+  let dyn : L.t pv -> L.t code = function
+    | Sta x -> L.lift x
+    | Dyn x -> x
+end
+
+let dyni : int pv -> int code =
+  let module M = Dyn(Lift_int) in
+  M.dyn
+
+let dynf : float pv -> float code =
+  let module M = Dyn(Lift_float) in
+  M.dyn
+
+module RingPV(STA:RING)(DYN:RING with type t = STA.t code)
+    (L:lift with type t = STA.t) = struct
+  type t = STA.t pv
+  include Dyn(L)
+
+  let zero = Sta STA.zero
+  let one  = Sta STA.one
+  let add x y =
+    match (x,y) with
+    | (Sta x, Sta y) -> Sta STA.(add x y)
+    | (x, y) -> Dyn DYN.(add (dyn x) (dyn y))
+  let sub x y =
+    match (x,y) with
+    | (Sta x, Sta y) -> Sta STA.(sub x y)
+    | (x, y) -> Dyn DYN.(sub (dyn x) (dyn y))
+  let mul x y =
+    match (x,y) with
+    | (Sta x, Sta y) -> Sta STA.(mul x y)
+    | (x, y) -> Dyn DYN.(mul (dyn x) (dyn y))
+
+end
+
+module RingFloatPCode =
+  RingPV(RingFloat)(RingFloatCode)(Lift_float)
+
+module VecRStaDyn(T: lift) = struct
+  type t = T.t pv
+  include Dyn(T)
+  type idx = int pv
+  type unt = unit code
+
+  module VSta = VecRStaDim(T)
+  module VDyn = VecRDyn(T)
+
+  let iter = function
+    | Vec (Sta n, body) ->
+      VSta.iter (Vec (n, fun i -> body (Sta i)))
+    | Vec (Dyn n, body) ->
+      VDyn.iter (Vec (n, fun i -> body (Dyn i)))
+
+  let reduce plus zero = function
+    | Vec (Sta n,v) ->
+        VSta.reduce plus zero (Vec (n, fun i -> v (Sta i)))
+    | Vec (Dyn n,v) ->
+      Dyn (VDyn.reduce (fun x y -> dyn (plus (Dyn x) (Dyn y))) (dyn zero)
+	     (Vec (n,fun i -> dyn (v (Dyn i)))))
+
+end
+
+let mvmult_ac : float array array -> (float array -> float array -> unit) code =
+ fun a ->
+   let n  = Array.length a in
+   let m  = Array.length a.(0) in
+   let a  = Vec (Sta n, fun i -> Vec (Sta m,
+                                      (fun j ->
+                                         match i, j with
+                                         | Sta i, Sta j -> Sta a.(i).(j)
+                                         | _ -> assert false)))
+   in
+   .<fun vout v ->
+     assert (n = Array.length vout && m = Array.length v);
+     .~(let vout = OVec (Sta n, fun i v -> .<vout.(.~(dyni i)) <- .~(dynf v)>.)
+        in
+        let v = Vec (Sta m, fun j -> Dyn .<v.(.~(dyni j))>.) in
+        let module MV = MVMULT(RingFloatPCode)(VecRStaDyn(Lift_float)) in
+        MV.mvmult vout a v)
+       >.
+
+let _ =
+  let vout = Array.make 5 0.0 in
+  (Runnative.run (mvmult_ac a)) vout v1;
+  print_code Format.std_formatter (mvmult_ac a); print_newline();
+  Array.iter (fun v -> Printf.printf "%f\n" v ) vout
+
+type amat = {n: int; m: int; a: (int pv, (int pv, float pv) vec) vec}
+
+let mvmult_abs : _ -> amat -> (float array -> float array -> unit) code =
+  fun mvmult -> fun {n; m; a} ->
+   .<fun vout v ->
+     assert (n = Array.length vout && m = Array.length v);
+     .~(let vout = OVec (Sta n, fun i v -> .<vout.(.~(dyni i)) <- .~(dynf v)>.)
+        in
+        let v = Vec (Sta m, fun j -> Dyn .<v.(.~(dyni j))>.) in
+        mvmult vout a v)
+       >.
+
+let amat1 : amat =
+  let n  = Array.length a and m  = Array.length a.(0) in
+  {n=n; m=m;
+   a  = Vec (Sta n, fun i -> Vec (Sta m,
+    (fun j ->
+      match (i,j) with
+      | (Sta i, Sta j) -> Sta a.(i).(j)
+      | _ -> assert false)))}
+
+let mvmult_ac1 =
+  mvmult_abs
+   (let module MV = MVMULT(RingFloatPCode)(VecRStaDyn(Lift_float)) in MV.mvmult)
+   amat1
+
+let _ =
+  let vout = Array.make 5 0.0 in
+  (Runnative.run mvmult_ac1) vout v1;
+  print_code Format.std_formatter mvmult_ac1; print_newline();
+  Array.iter (fun v -> Printf.printf "%f\n" v ) vout
+
+module RingFloatOPCode = struct
+  include RingFloatPCode
+  let add x y =
+    match (x,y) with
+    | (Sta 0.,y) -> y
+    | (x,Sta 0.) -> x
+    | (x,y)      -> RingFloatPCode.add x y
+  let sub x y =
+    match (x,y) with
+    | (x,Sta 0.) -> x
+    | (x,y)      -> RingFloatPCode.sub x y
+  let mul x y =
+    match (x,y) with
+    | (Sta 0.,_) -> Sta 0.
+    | (_,Sta 0.) -> Sta 0.
+    | (Sta 1.,y) -> y
+    | (x,Sta 1.) -> x
+    | (x,y)      -> RingFloatPCode.mul x y
+end
+
+let mvmult_opt =
+  mvmult_abs
+   (let module MV = MVMULT(RingFloatOPCode)(VecRStaDyn(Lift_float)) in MV.mvmult)
+   amat1
+
+let _ =
+  let vout = Array.make 5 0.0 in
+  (Runnative.run mvmult_opt) vout v1;
+  print_code Format.std_formatter mvmult_opt; print_newline();
   Array.iter (fun v -> Printf.printf "%f\n" v ) vout
