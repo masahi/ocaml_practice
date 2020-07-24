@@ -115,7 +115,7 @@ module TrackRank =
   type 'a tag_lstate_ = [`TRan of 'a lstate ]
   type 'a tag_lstate = 'a tag_lstate_
   type ('pc,'v) lm = ('pc,'v) cmonad
-    constraint 'pc = <state : [> 'a tag_lstate]; ..>
+    constraint 'pc = <state : [> 'a tag_lstate]; classif : 'a;..>
 
   let ip = (fun x -> `TRan x), (function `TRan x -> Some x | _ -> None),
            "TrackRank"
@@ -286,10 +286,10 @@ end
 module type LOWER = sig
   type 'a lstate = ('a, C.contr) abstract
   type ('pc,'v) lm = ('pc,'v) cmonad
-    constraint 'pc = <state : [> `TLower of 'a lstate ];  ..>
-  val decl   : ('a, C.contr) abstract -> ('b, C.contr) lm
+    constraint 'pc = <state : [> `TLower of 'a lstate ]; classif : 'a; ..>
+  val decl   : ('a, C.contr) abstract -> (<classif : 'a; ..>, C.contr) lm
   val updt   : 'a C.vc -> ('a,int) abstract -> ('a,int) abstract -> 'a C.vo ->
-            'a C.Dom.vc -> ('b, unit) lm option
+            'a C.Dom.vc -> (<classif : 'a; ..>, unit) lm option
   val fin    : unit -> ('a,  C.contr) lm
   val wants_pack : bool
 end
@@ -618,6 +618,320 @@ module type OUTPUTDEP = sig
     module Det      : DETERMINANT
 end
 
+module OutJustMatrix(OD : OUTPUTDEP) = struct
+  module IF = struct
+      module R   = NoRank
+      module P   = DiscardPivot
+      module L   = NoLower end
+  type res = C.contr
+  let make_result m = ret m.matrix
+end
+
+module OutDet(OD : OUTPUTDEP) = struct
+  module IF = struct
+      module R   = NoRank
+      module P   = DiscardPivot
+      module L   = NoLower end
+  type res = C.contr * C.Dom.v
+  let make_result m =
+    let* det = OD.Det.fin () in
+    ret (Tuple.tup2 m.matrix det)
+  (* Initialization: check the preconditions of instantiation of this struct*)
+  let _ = OD.Det.fin ()
+end
+
+module OutRank(OD : OUTPUTDEP) = struct
+  module IF = struct
+      module R   = Rank
+      module P   = DiscardPivot
+      module L   = NoLower end
+  type res = C.contr * int
+  let make_result m =
+    let* rank = IF.R.fin () in
+    ret (Tuple.tup2 m.matrix rank)
+  (* Initialization: check the preconditions of instantiation of this struct*)
+  let _ = IF.R.fin ()
+end
+
+module OutDetRank(OD : OUTPUTDEP) = struct
+  module IF = struct
+      module R   = Rank
+      module P   = DiscardPivot
+      module L   = NoLower end
+  type res = C.contr * C.Dom.v * int
+  let make_result m =
+    let* det  = OD.Det.fin () in
+    let* rank = IF.R.fin () in
+    ret (Tuple.tup3 m.matrix det rank)
+  (* Initialization: check the preconditions of instantiation of this struct*)
+  let _ = OD.Det.fin ()
+  let _ = IF.R.fin ()
+end
+
+module OutDetRankPivot(OD : OUTPUTDEP) = struct
+  module IF = struct
+      module R   = Rank
+      module P   = KeepPivot(OD.PivotRep)
+      module L   = NoLower end
+  type res = C.contr * C.Dom.v * int *  IF.P.perm_rep
+(* I wish to write that, but it can't be generalized!
+  let pivfin = match P.fin with Some fin -> fin
+  | None -> failwith "No Pivot computed provided"
+*)
+  let make_result m =
+    let* det  = OD.Det.fin () in
+    let* rank = IF.R.fin () in
+    let* pivmat = IF.P.fin () in
+    ret (Tuple.tup4 m.matrix det rank pivmat)
+  (* Initialization: check the preconditions of instantiation of this struct*)
+  let _ = OD.Det.fin ()
+  let _ = IF.R.fin ()
+  let _ = IF.P.fin ()
+end
+
+module Out_L_U(OD : OUTPUTDEP) = struct
+  module IF = struct
+      module R   = NoRank
+      module P   = KeepPivot(OD.PivotRep)
+      module L   = SeparateLower
+  end
+  type res = C.contr * C.contr * IF.P.perm_rep
+  let make_result m =
+    let* pivmat = IF.P.fin () in
+    let* lower = IF.L.fin () in
+    ret (Tuple.tup3 m.matrix lower pivmat)
+  (* Initialization: check the preconditions of instantiation of this struct*)
+  let _ = C.Dom.kind = Domains_sig.Domain_is_Field ||
+          failwith "Out_L_U: Can't extract the L in a non-field"
+  let _ = IF.P.fin ()
+end
+
+(* Only for Fields: because we can't extract the L in a non-field *)
+module Out_LU_Packed(OD : OUTPUTDEP) = struct
+  module IF = struct
+      module R   = NoRank
+      module P   = KeepPivot(OD.PivotRep)
+      module L   = PackedLower end
+  type res = C.contr * IF.P.perm_rep
+  let make_result _ =
+    let* pivmat = IF.P.fin () in
+    let* lower = IF.L.fin () in
+    ret (Tuple.tup2 lower pivmat)
+    (* we really should be able to assert that lower == m.matrix
+    here, but can't because the representation of lower/m.matrix
+    could be 'functional' !*)
+  (* Initialization: check the preconditions of instantiation of this struct*)
+  let _ = C.Dom.kind = Domains_sig.Domain_is_Field ||
+          failwith "Out_LU_Packed: Can't extract the L in a non-field"
+  let _ = IF.P.fin ()
+end
+
+module type INTERNAL_FEATURES = sig
+  module R      : TrackRank.RANK
+  module P      : TRACKPIVOT
+  module L      : LOWER
+end
+
+module type OUTPUT = functor(OD : OUTPUTDEP) -> sig
+  module IF : INTERNAL_FEATURES
+  type res
+  val make_result : 'a wmatrix ->
+   (<classif : 'a;
+     state : [> `TDet of 'a OD.Det.lstate |
+                'a IF.R.tag_lstate |
+                `TPivot of 'a IF.P.lstate |
+                `TLower of 'a IF.L.lstate]; ..>,res) cmonad
+   (*
+    ('a,res,[> 'a OD.Det.tag_lstate | 'a IF.R.tag_lstate
+             | 'a IF.P.tag_lstate   | 'a IF.L.tag_lstate],'w) cmonad
+      *)
+end
+
+(* The `keyword' list of all the present external features *)
+module type FEATURES = sig
+  module Det       : DETERMINANT
+  module PivotF    : PIVOT
+  module PivotRep  : PIVOTKIND
+  module Update    : UPDATE
+  module Input     : INPUT
+  module Output    : OUTPUT
+end
+
+module GenGE(F : FEATURES) = struct
+    module O = F.Output(F)
+    (* module U = F.Update(F.Det) *)
+    (* module Verify = Test(F)  that does the pre-flight test *)
+
+    let wants_pack = O.IF.L.wants_pack
+    let can_pack   =
+        let module U = F.Update(F.Det) in
+        (U.upd_kind = DivisionBased)
+    (* some more pre-flight tests *)
+    let _ = ensure ((not wants_pack) || can_pack)
+           "Cannot return a packed L in this case"
+
+    let zerobelow mat pos =
+        let module IF = O.IF in
+        let module U = F.Update(F.Det) in
+        let innerbody j bjc =
+            whenM (Logic.notequalL bjc C.Dom.zeroL ) (
+                let* det = F.Det.get_magn () in
+                optSeqM (Iters.col_iter mat.matrix j (Idx.succ pos.p.colpos)
+               (Idx.pred mat.numcol) C.getL
+                      (fun k bjk ->
+                      let* brk = ret (C.getL mat.matrix pos.p.rowpos k) in
+                      U.update bjc pos.curval brk bjk
+                          (fun ov -> C.col_head_set mat.matrix j k ov) det) UP )
+                      (IF.L.updt mat.matrix j pos.p.colpos C.Dom.zeroL
+                          (* this makes no sense outside a field! *)
+                          (C.Dom.divL bjc pos.curval))) in
+
+              seqM (Iters.row_iter mat.matrix pos.p.colpos
+              (Idx.succ pos.p.rowpos)
+              (Idx.pred mat.numrow) C.getL innerbody UP)
+                   (U.update_det pos.curval)
+
+   let init input =
+        let module IF = O.IF in
+          let* (a,rmar,augmented) = F.Input.get_input input in
+          let* r = IF.R.decl () in
+          let* c = retN (liftRef Idx.zero) in
+          let* b = retN (C.mapper C.Dom.normalizerL (C.copy a)) in
+          let* m = retN (C.dim1 a) in
+          let* rmar = retN rmar in
+          let* n = if augmented then retN (C.dim2 a) else ret rmar in
+          let* _ = F.Det.decl () in
+          let* _ = IF.P.decl rmar in
+          let* _ = IF.L.decl (if wants_pack then b else C.identity rmar m) in
+          let mat = {matrix=b;  numrow=n;  numcol=m} in
+          ret (mat, r, c, rmar)
+
+   let forward_elim (mat, r, c, rmar) =
+        let module IF = O.IF in
+          whileM (Logic.andL (Idx.less (liftGet c) mat.numcol)
+                              (Idx.less (liftGet r) rmar) )
+             (
+             let* rr = retN (liftGet r) in
+             let* cc = retN (liftGet c) in
+             let cp  = {rowpos=rr; colpos=cc} in
+             let module Pivot = F.PivotF(F.Det)(IF.P)(IF.L) in
+             let* pivot = bind (Pivot.findpivot mat cp) retN in
+             seqM (matchM pivot (fun pv ->
+                      seqM (zerobelow mat {p=cp; curval=pv} )
+                           (IF.R.succ ()) )
+                      (F.Det.zero_sign () ))
+                  (updateM c Idx.succ) )
+
+   let gen input =
+          let* (mat, r, c, rmar) = init input in
+          seqM
+            (forward_elim (mat, r, c, rmar))
+            (O.make_result mat)
+end
+
+end
+
+module Solve = struct
+module type INPUT = sig
+    type inp
+    type rhs = C.contr
+    val get_input : ('a, inp) abstract ->
+      (<classif : 'a;..>, ('a, C.contr) abstract * ('a, rhs) abstract) monad
+  end
+
+module InpMatrixVector = struct
+    type inp   = C.contr * C.contr
+    type rhs   = C.contr
+    let get_input a =
+        let* (b,c) = ret (liftPair a) in
+        let* bb = retN b in
+        let* cc = retN c in
+        ret (bb, cc)
+  end
+
+module type OUTPUT = sig
+  type res
+  val make_result : ('a, C.contr) abstract -> ('a, C.contr) abstract ->
+      ('a, int) abstract -> ('a, int) abstract -> ('a, int) abstract ->
+      (<classif : 'a;..>, res) cmonad
+end
+
+module OutJustAnswer = struct
+  type res = C.contr
+  let make_result src dest rmar cols rows =
+      seqM
+      (loopM Idx.zero (Idx.pred cols) (fun j ->
+          loopM Idx.zero (Idx.pred rows) (fun i ->
+              let* aij = ret (C.getL src i (Idx.add j rmar)) in
+              ret (C.col_head_set dest i j aij)
+          ) UP) UP)
+      (ret dest)
+end
+
+module type FEATURES = sig
+  module Det       : DETERMINANT
+  module PivotF    : PIVOT
+  module Input     : INPUT
+  module Output    : OUTPUT
+end
+
+module GenSolve(F : FEATURES) = struct
+    (* module Verify = Test(F)  that does the pre-flight test *)
+
+    (* some more pre-flight tests *)
+    let _ = ensure (C.Dom.kind = Domains_sig.Domain_is_Field)
+        "Cannot Solve in a non-field"
+    (* more to be filled in *)
+
+    (* We will solve via GE. We inline the structure to improve
+       compilation time... *)
+    module GE' = GE.GenGE(struct
+        module Det = F.Det
+        module PivotF = F.PivotF
+        module PivotRep = RowVectorPerm
+        module Update = GE.DivisionUpdate
+        module Input = GE.InpMatrixMargin
+        module Output = GE.OutJustMatrix
+    end)
+
+    open C.Dom
+    let init input =
+        let* (a,b) = F.Input.get_input input in
+        ret (a, b)
+
+    let back_elim a m n =
+        let innerloop k =
+            let* t = retN (divL oneL (C.getL a k k)) in
+            seqM
+              (loopM m (Idx.pred n) (fun j ->
+                  ret (C.col_head_set a k j (t *^ (C.getL a k j)))) UP)
+              (seqM
+              (loopM (Idx.zero) (Idx.pred k) (fun i ->
+                seqM
+                  (loopM m (Idx.pred n) (fun j ->
+                      let* aij = ret (C.getL a i j) in
+                      let* aik = ret (C.getL a i k) in
+                      let* akj = ret (C.getL a k j) in
+                      ret (C.col_head_set a i j (aij -^ (aik *^ akj)))) UP)
+                  (ret (C.col_head_set a i k zeroL))) UP)
+              (ret (C.col_head_set a k k oneL)))
+        in
+        seqM
+          (loopM (Idx.pred m) Idx.zero (innerloop) DOWN)
+          (ret a)
+
+    let gen input =
+        let* (a,b)   = F.Input.get_input input in
+        let* ma      = retN (C.dim1 a) in
+        let* na      = retN (C.dim2 a) in
+        let* nb      = retN (C.dim1 b) in
+        let* aug_a   = retN (C.augment a ma na b nb) in
+        let* u       = GE'.gen (Tuple.tup2 aug_a (C.dim2 a)) in
+        let* uu      = retN u in
+        let* eli     = back_elim uu ma (Idx.add na nb) in
+        let* res     = F.Output.make_result eli b na nb ma in
+        ret res
+end
 
 end
 
