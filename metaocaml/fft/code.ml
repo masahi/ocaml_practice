@@ -22,10 +22,10 @@ let retN (a : 'v code) : (<answer: 'w code; ..>,'v code) monad
    but not the other way around
 *)
 
-let seq a b = .< begin .~a ; .~b end >.
+let seq a b = .< begin ignore(.~a) ; .~b end >.
 let seqL a b = ret (seq a b)
 
-let seqM a b = fun s k -> k s .< begin .~(a s k0) ; .~(b s k0) end >.
+let seqM a b = fun s k -> k s .< begin ignore(.~(a s k0)) ; .~(b s k0) end >.
 
 let optSeq a = function
     | Some c -> seq a c
@@ -54,13 +54,13 @@ let whenM test th  = rshiftM (fun s ->
 (* loops actually bind a value *)
 let loopM low high body = function
   | UP -> (fun s k ->
-      k s .< for j = .~low to .~high do .~(body .<j>. s k0) done >. )
+      k s .< for j = .~low to .~high do ignore(.~(body .<j>. s k0)) done >. )
   | DOWN -> (fun s k ->
-      k s .< for j = .~low downto .~high do .~(body .<j>. s k0) done >. )
+      k s .< for j = .~low downto .~high do ignore(.~(body .<j>. s k0)) done >. )
 
 (* while ``loops'' do not naturally bind a value *)
 let whileM cond body = fun s k ->
-  k s .< while .~(cond) do .~(body s k0) done >.
+  k s .< while .~(cond) do ignore(.~(body s k0)) done >.
 
 (* match for Some/None *)
 let matchM x som non = fun s k -> k s .< match .~x with
