@@ -234,7 +234,9 @@ let amat1 : amat =
     (fun j ->
       match (i,j) with
       | (Sta i, Sta j) -> Sta a.(i).(j)
-      | _ -> assert false)))}
+      | (Sta i, Dyn j) -> Dyn .<a.(i).(.~j)>.
+      | (i, j) -> Dyn .<a.(.~(dyni i)).(.~(dyni j))>.)))
+ }
 
 let mvmult_ac1 =
   mvmult_abs
@@ -276,4 +278,95 @@ let _ =
   let vout = Array.make 5 0.0 in
   (Runnative.run mvmult_opt) vout v1;
   print_code Format.std_formatter mvmult_opt; print_newline();
+  Array.iter (fun v -> Printf.printf "%f\n" v ) vout
+
+module VecRStaOptDynFloat = struct
+  module R = RingFloatOPCode
+  module M = VecRStaDyn(Lift_float)
+  include M
+  let threshold = 3			(* density threshold *)
+
+  let count_non_zeros n vecf =
+    let rec loop acc i =
+      if i >= n then acc else
+      let acc = if vecf (Sta i) = Sta 0. then acc else acc + 1 in
+      loop acc (i+1)
+    in loop 0 0
+
+  let reduce plus zero = function
+    | (Vec (Sta n,vecf)) as vec ->
+	if count_non_zeros n vecf < threshold then
+	 M.reduce plus zero vec
+	else
+         (* By making the vector length dynamic we switch off
+            the loop unrolling. *)
+	 M.reduce plus zero (Vec (Dyn .<n>.,vecf))
+    | vec -> M.reduce plus zero vec
+end;;
+
+let mvmult_roll =
+  mvmult_abs
+   (let module MV = MVMULT(RingFloatOPCode)(VecRStaOptDynFloat) in MV.mvmult)
+   amat1
+
+let _ =
+  (* let vout = Array.make 5 0.0 in *)
+  (* (Runnative.run mvmult_roll) vout v1; *)
+  print_code Format.std_formatter mvmult_roll; print_newline()
+  (* Array.iter (fun v -> Printf.printf "%f\n" v ) vout *)
+
+type copy_row_t = float array -> (int code -> float code)
+
+let amatcopy : copy_row_t -> amat = fun copy_row ->
+  let n  = Array.length a and m  = Array.length a.(0) in
+  {n=n; m=m;
+   a  = Vec (Sta n, fun i -> Vec (Sta m,
+    (fun j ->
+      match (i,j) with
+      | (Sta i, Sta j) -> Sta a.(i).(j)
+      | (Sta i, Dyn j) -> let deref = copy_row a.(i) in (* matrix row *)
+	                  Dyn (deref j)
+      | _ -> failwith "not implemented yet: exercise")))
+ }
+
+let copy_row1: copy_row_t = fun v ->
+  let vcode =
+    .<Array.of_list
+    .~(List.fold_right (fun h t -> .<.~h :: .~t>.)
+         (List.map Lift_float.lift
+            (Array.to_list v))
+         .<[]>.)>.
+  in
+  fun idx -> .<.~vcode.(.~idx)>.
+
+let mvmult_let1 =
+  mvmult_abs
+   (let module MV = MVMULT(RingFloatOPCode)(VecRStaOptDynFloat) in MV.mvmult)
+   (amatcopy copy_row1)
+
+let _ =
+  let vout = Array.make 5 0.0 in
+  (Runnative.run mvmult_let1) vout v1;
+  print_code Format.std_formatter mvmult_let1; print_newline();
+  Array.iter (fun v -> Printf.printf "%f\n" v ) vout
+
+let copy_row_let: copy_row_t = fun v ->
+  let vcode = genlet
+    .<Array.of_list
+    .~(List.fold_right (fun h t -> .<.~h :: .~t>.)
+         (List.map Lift_float.lift
+            (Array.to_list v))
+         .<[]>.)>.
+  in
+  fun idx -> .<.~vcode.(.~idx)>.
+
+let mvmult_let2 =
+  mvmult_abs
+   (let module MV = MVMULT(RingFloatOPCode)(VecRStaOptDynFloat) in MV.mvmult)
+   (amatcopy copy_row_let)
+
+let _ =
+  let vout = Array.make 5 0.0 in
+  (Runnative.run mvmult_let1) vout v1;
+  print_code Format.std_formatter mvmult_let2; print_newline();
   Array.iter (fun v -> Printf.printf "%f\n" v ) vout
