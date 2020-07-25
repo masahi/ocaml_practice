@@ -34,7 +34,8 @@ B /home/masa/.opam/4.07.1+BER/lib/textutils
 B /home/masa/.opam/4.07.1+BER/lib/textutils_kernel
 B /home/masa/.opam/4.07.1+BER/lib/typerep
 B /home/masa/.opam/4.07.1+BER/lib/variantslib
-B _build/default/.power_bench.eobjs/byte
+B _build/4.07.1+BER/.power_bench.eobjs/byte
+B _build/4.07.1+BER/.power_bench.eobjs/native
 S /home/masa/.opam/4.07.1+BER/lib/base
 S /home/masa/.opam/4.07.1+BER/lib/base/caml
 S /home/masa/.opam/4.07.1+BER/lib/base/md5

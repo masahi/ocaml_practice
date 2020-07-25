@@ -25,7 +25,7 @@ module Let_syntax = struct
   let (let*) d f = bind d f
 end
 
-let _ =
+let test letgen_impl =
   let one = .<1>. in
   let plus x y = .<.~x + .~y>. in
   let simplest_code = let gen x y = plus x (plus y one) in
@@ -38,17 +38,26 @@ let _ =
   let plus x y = .<.~x +. .~y>. and one = .<1.0>. in
   let float_f = Runnative.run (simplest_param_code plus one) in
   Printf.printf "%f\n" (float_f 2. 3.);
-  let letgen exp k = .<let t = .~exp in .~(k .<t>.)>. in
   let param_code2 plus one =
-    let gen x y k = letgen (plus y one)
+    let gen x y k = letgen_impl (plus y one)
         (fun ce -> k (plus ce (plus x ce)))
     and
       k0 x = x
     in
     .<fun x y -> .~(gen .<x>. .<y>. k0)>. in
-  print_code Format.std_formatter (param_code2 plus one); print_newline ();
-  let f_cps = Runnative.run (param_code2 plus one) in
-  Printf.printf "%f\n" (f_cps 2. 3.)
+  let f = Runnative.run (param_code2 plus one) in
+  param_code2 plus one, f
+
+let _ =
+  let letgen exp k = .<let t = .~exp in .~(k .<t>.)>. in
+  let cde, f = test letgen in
+  print_code Format.std_formatter cde; print_newline ();
+  Printf.printf "letgen version: %f\n" (f 2. 3.)
+
+let _ =
+  let cde, f = test (fun exp k -> k (genlet exp)) in
+  print_code Format.std_formatter cde; print_newline ();
+  Printf.printf "genlet version: %f\n" (f 2. 3.)
 
 let _ =
   let plus x y = .<.~x +. .~y>. and one = .<1.0>. in
