@@ -1,4 +1,5 @@
 open Fft_types
+open Util
 
 let pi = 3.14159265358979
 
@@ -41,7 +42,8 @@ sig
       index and the two elements in corresponding positions in the
       arrays available to each call to the user-supplied function. *)
   val map2i : (int -> elem -> elem -> elem * elem) ->
-                      'n t -> 'n t -> 'n t * 'n t
+    'n t -> 'n t -> 'n t * 'n t
+
 end
 
 (** An implementation of the ARRAY interface based on balanced binary
@@ -78,9 +80,43 @@ struct
         Branch (a', b'), Branch (c', d'), j''
 
   let map2i f l1 l2 = let l1', l2', _ = map2i' f 0 l1 l2 in l1', l2'
+
 end
-module Arr : ARRAY with type elem = Complex.t
-  = Make_arr(struct type elem = Complex.t end)
+
+module Arr :
+sig
+  include ARRAY with type elem = Complex.t
+
+  val mk : 'n nat -> elem array -> 'n t
+
+  val unmk : 'n t -> elem array
+end =
+struct
+  include Make_arr(struct type elem = Complex.t end)
+
+  (* Question 2(b)(i) *)
+  let mk : type n. n nat -> Complex.t array -> n t = fun num arr ->
+    let rec mk_helper: type n. n nat -> Complex.t array -> int -> int -> n t =
+      fun num arr left_end right_end ->
+        match num with
+        | Z -> Leaf(arr.(left_end))
+        | S(n) ->
+          let left = mk_helper n arr left_end (right_end / 2) in
+          let right = mk_helper n arr (right_end / 2) right_end in
+          Branch(left, right)
+    in
+    let exponent = nat_to_int num in
+    let length = pow 2 exponent in
+    mk_helper num arr 0 length
+
+  (* Question 2(b)(i) *)
+  let rec unmk : type n. n t -> Complex.t array = function
+    | Leaf(v) -> Array.init 1 (fun _ -> v)
+    | Branch(left, right) ->
+      let left_cde = unmk left in
+      let right_cde = unmk right in
+      Array.append left_cde right_cde
+end
 
 (** The jth of the n nth roots of unity. *)
 let w n j =

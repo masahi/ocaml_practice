@@ -1,16 +1,6 @@
 open Codelib
 open Fft_types
-
-let rec nat_to_int: type n. n nat -> int = function
-  | Z -> 0
-  | S(n) -> 1 + (nat_to_int n)
-
-let rec pow a = function
-  | 0 -> 1
-  | 1 -> a
-  | n ->
-    let b = pow a (n / 2) in
-    b * b * (if n mod 2 = 0 then 1 else a)
+open Util
 
 let convert_array: 'a code array -> 'a array code =
   let rec convert_list: 'a code list -> 'a list code = function
@@ -99,8 +89,30 @@ let mk : type n. n nat -> (Complex.t array -> Complex.t array) code =
     let res = fft arr in
     Arr.dyn res)>.
 
+let test exponent do_bench =
+  let arr_length = pow 2 (nat_to_int exponent) in
+  let fft_cde = mk exponent in
+  let open Complex in
+  let inp = Array.init arr_length (fun _ -> {re=Random.float 1.0; im=Random.float 1.0}) in
+  let f = Runnative.run fft_cde in
+  let arr = Fft_unstaged.Arr.mk exponent inp in
+
+  if do_bench then
+    let open Core_bench in
+    [Bench.Test.create ~name:"staged" (fun () -> ignore(f inp));
+     Bench.Test.create ~name:"unstaged" (fun () -> ignore(Fft_unstaged.fft arr))]
+    |> Bench.bench
+  else begin
+    print_code Format.std_formatter fft_cde; print_newline ();
+    let res = f inp in
+    Array.iter (fun {re;im} -> Printf.printf "Staged: (%f, %f)\n" re im) res;
+    print_newline ();
+    let res = Fft_unstaged.fft arr in
+    Array.iter (fun {re;im} -> Printf.printf "Unstaged: (%f, %f)\n" re im) (Fft_unstaged.Arr.unmk res)
+  end
+
 let _ =
   let exponent = S(S(S(Z))) in
-  (* let arr_length = pow 2 (nat_to_int exponent) in *)
-  let fft_cde = mk exponent in
-  print_code Format.std_formatter fft_cde; print_newline ()
+  test exponent false;
+  let exponent = S(S(S(S(S(Z))))) in
+  test exponent true;
