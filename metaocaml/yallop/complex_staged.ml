@@ -10,8 +10,9 @@ let add l r = Dyn .< Complex.add .~(dyn_complex l) .~(dyn_complex r) >.
 
 let sub l r = Dyn .< Complex.sub .~(dyn_complex l) .~(dyn_complex r) >.
 
-let mul l r = Dyn .< Complex.mul .~(dyn_complex l) .~(dyn_complex r) >.
-
-let div l r = Dyn .< Complex.div .~(dyn_complex l) .~(dyn_complex r) >.
-
-let exp z = Dyn .< Complex.exp .~(dyn_complex z) >.
+let mul l r =
+   match l, r with
+   | Sta v1, Sta v2 -> Sta (Complex.mul v1 v2)
+   | Sta ({re; im}), Dyn _ when re = 1.0 && im = 0.0 -> r
+   | Dyn _,  Sta ({re; im}) when re = 1.0 && im = 0.0 -> l
+   | _ -> Dyn .< Complex.mul .~(dyn_complex l) .~(dyn_complex r) >.
