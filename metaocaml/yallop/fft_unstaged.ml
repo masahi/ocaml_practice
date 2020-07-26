@@ -101,8 +101,8 @@ struct
         match num with
         | Z -> Leaf(arr.(left_end))
         | S(n) ->
-          let left = mk_helper n arr left_end (right_end / 2) in
-          let right = mk_helper n arr (right_end / 2) right_end in
+          let left = mk_helper n arr left_end (left_end + (right_end - left_end)/ 2) in
+          let right = mk_helper n arr (left_end + (right_end - left_end) / 2) right_end in
           Branch(left, right)
     in
     let exponent = nat_to_int num in
