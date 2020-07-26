@@ -1,5 +1,5 @@
 (executables
- (names power_bench hash_table filter taha_part1 yallop_lec2 yallop_lec3 strings)
+ (names power_bench hash_table filter taha_part1 yallop_lec2 yallop_lec3 strings recursion)
  (ocamlopt_flags (:standard -I +compiler-libs ocamlcommon.cmxa dynlink.cmxa codelib.cmx runnative.cmx lifts.cmx))
  (ocamlc_flags (:standard -I +compiler-libs ocamlcommon.cma ocamlbytecomp.cma ocamltoplevel.cma metalib.cma berstart.cmo))
  (preprocess future_syntax)

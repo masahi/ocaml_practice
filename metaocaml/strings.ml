@@ -143,7 +143,7 @@ let ssearch_careless p = .< fun s ->
                | Some _ -> .~(loop 0 (WindowS.slide w)) >.
       in loop 0 (WindowS.view .<s>. .<0>.)) >.
 
-(* let () = test_function "ssearch_careless" (fun pat -> Runcode.run (ssearch_careless pat));; *)
+(* let () = test_function "ssearch_careless" (fun pat -> Runnative.run (ssearch_careless pat));; *)
 
 
 (** Here's a second attempt, written with a little more care.
@@ -170,7 +170,7 @@ let ssearch_2 p = .< fun s ->
 
 let () =
   print_code Format.std_formatter (ssearch_2 "aab"); print_newline ();
-  test_function "ssearch_2" (fun pat -> Runcode.run (ssearch_2 pat))
+  test_function "ssearch_2" (fun pat -> Runnative.run (ssearch_2 pat))
 
 (** NB: try viewing the output. *)
 
@@ -195,7 +195,7 @@ let ssearch_3 p =
 
 let () =
   print_code Format.std_formatter (ssearch_3 "aab"); print_newline ();
-  test_function "ssearch_3" (fun pat -> Runcode.run (ssearch_3 pat))
+  test_function "ssearch_3" (fun pat -> Runnative.run (ssearch_3 pat))
 
 (** NB: view the generated code! *)
 
@@ -259,7 +259,7 @@ struct
     | x -> `Known x
     | exception Not_found ->
        `Unknown .< if String.length .~s - .~i > j
-                   then Some .~s.[.~i + j]
+                   then Some (.~s).[.~i + j]
                    else None >.
   let slide ((s,m), i) =
     ((s, IntMap.fold (fun i c m -> if i - 1 >= 0 then IntMap.add (i - 1) c m else m) m IntMap.empty),
@@ -297,18 +297,19 @@ fun w i c k ->
 *)
 
 let ssearch_4 p = .< fun s ->
-     .~(Letrec.letrec (fun restart sinf -> .< fun j -> .~(let w = PSWindow.view (.<s>., sinf) .<j>. in
-        let rec loop i w =
+  .~(Letrec.letrec (fun restart sinf -> .< fun j ->
+      .~(let w = PSWindow.view (.<s>., sinf) .<j>. in
+         let rec loop i w =
            if String.length p = i then .<true>.
            else match_index w i p.[i] @@ function
                 | `Invalid -> .<false>.
                 | `Yes w -> loop (i + 1) w
                 | `No -> let j, map = PSWindow.info (PSWindow.slide w) in .< .~(restart map) .~j >.
-            in loop 0 w) >.)
+         in loop 0 w) >.)
        (fun restart -> .< .~(restart IntMap.empty) 0 >.)) >.
 
 (** NB: look at the generated code! *)
 
 let () =
   print_code Format.std_formatter (ssearch_4 "aab"); print_newline ();
-  test_function "ssearch_4" (fun pat -> Runcode.run (ssearch_4  pat));;
+  test_function "ssearch_4" (fun pat -> Runnative.run (ssearch_4  pat));;
