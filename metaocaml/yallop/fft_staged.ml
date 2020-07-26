@@ -12,6 +12,18 @@ let rec pow a = function
     let b = pow a (n / 2) in
     b * b * (if n mod 2 = 0 then 1 else a)
 
+let convert_array: 'a code array -> 'a array code =
+  let rec convert_list: 'a code list -> 'a list code = function
+    | hd :: tl ->
+      let tl_code = convert_list tl in
+      .<.~hd :: .~tl_code>.
+    | [] -> .<[]>. in
+  fun arr ->
+    let lst = List.init (Array.length arr) (fun i -> arr.(i)) in
+    let lst_code = convert_list lst in
+    .<Array.of_list .~lst_code >.
+
+
 module Arr :
 sig
   include Fft_unstaged.ARRAY with type elem = complex_sd
@@ -29,27 +41,32 @@ struct
   type elem_ = Complex.t
 
   (* Question 2(b)(i) *)
-  let rec mk : type n. n nat -> Complex.t array code -> n t = fun num cde_arr ->
-    match num with
-    | Z -> Leaf(Dyn(.<(.~cde_arr).(0)>.))
-    | S(n) ->
-      let exponent = nat_to_int n in
-      let length = pow 2 exponent in
-      let half = (length / 2) in
-      let left_arr = .<Array.init half (fun i -> (.~cde_arr).(i))>. in
-      let right_arr = .<Array.init half (fun i -> (.~cde_arr).(i + half))>. in
-      let left = mk n left_arr in
-      let right = mk n right_arr in
-      Branch(left, right)
+  let mk : type n. n nat -> Complex.t array code -> n t = fun num cde_arr ->
+    let rec mk_helper: type n. n nat -> Complex.t array code -> int -> int -> n t =
+      fun num cde_arr left_end right_end ->
+        match num with
+        | Z -> Leaf(Dyn(.<(.~cde_arr).(left_end)>.))
+        | S(n) ->
+          let left = mk_helper n cde_arr left_end (right_end / 2) in
+          let right = mk_helper n cde_arr (right_end / 2) right_end in
+          Branch(left, right)
+    in
+    let exponent = nat_to_int num in
+    let length = pow 2 exponent in
+    mk_helper num cde_arr 0 length
 
   (* Question 2(b)(i) *)
-  let rec dyn : type n. n t -> Complex.t array code = function
-    | Leaf(Sta(v)) -> .<Array.init 1 (fun _ -> .~(dyn_complex (Sta v)))>.
-    | Leaf(Dyn(cde)) -> .<Array.init 1 (fun _ -> .~cde)>.
-    | Branch(left, right) ->
-      let left_cde = dyn left in
-      let right_cde = dyn right in
-      .<Array.append .~left_cde .~right_cde>.
+  let dyn : type n. n t -> Complex.t array code = fun arr ->
+    let rec dyn_helper : type n. n t -> Complex.t code array = function
+      | Leaf(Sta(v)) -> Array.init 1 (fun _ -> dyn_complex (Sta v))
+      | Leaf(Dyn(cde)) -> Array.init 1 (fun _ -> cde)
+      | Branch(left, right) ->
+        let left_cde = dyn_helper left in
+        let right_cde = dyn_helper right in
+        Array.append left_cde right_cde in
+    let cde_arr = dyn_helper arr in
+    convert_array cde_arr
+
 end
 
 let w n j = Sta (Fft_unstaged.w n j)
@@ -83,7 +100,7 @@ let mk : type n. n nat -> (Complex.t array -> Complex.t array) code =
     Arr.dyn res)>.
 
 let _ =
-  let exponent = S(S(Z)) in
+  let exponent = S(S(S(Z))) in
   (* let arr_length = pow 2 (nat_to_int exponent) in *)
   let fft_cde = mk exponent in
   print_code Format.std_formatter fft_cde; print_newline ()
