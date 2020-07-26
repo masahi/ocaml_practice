@@ -112,7 +112,7 @@ let test exponent do_bench =
   end
 
 let _ =
-  let exponent = S(S(S(S(Z)))) in
+  let exponent = S(S(S(Z))) in
   test exponent false;
   let exponent = S(S(S(S(S(Z))))) in
   test exponent true;
