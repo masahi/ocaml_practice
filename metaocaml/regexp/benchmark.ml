@@ -79,9 +79,9 @@ struct
              module type of Re_unstaged with type re := Re_unstaged.re)
   type re = string -> bool
   let compile t =
-    let code = Nfa_staged.accept (Regex.compile t) in
+    let code = Nfa_staged.accept3 (Regex.compile t) in
     let f = Runnative.run (code) in
-    fun str -> (f (explode str))
+    f
   let exec r s = r s
 end
 

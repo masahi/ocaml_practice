@@ -72,10 +72,9 @@ let nfa_unstaged s =
   fun s -> accept (explode s)
 
 let nfa_staged s =
-  let cde = (Nfa_staged.accept (Regex.compile (Regex.parse s))) in
+  let cde = (Nfa_staged.accept3 (Regex.compile (Regex.parse s))) in
   print_code Format.std_formatter cde; print_newline ();
-  let f = Runnative.run cde in
-  fun str -> (f (explode str))
+  Runnative.run cde
 
 let () =
   begin
