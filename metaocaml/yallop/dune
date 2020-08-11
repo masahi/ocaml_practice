@@ -1,5 +1,5 @@
 (executables
- (names print strings recursion fft_staged)
+ (names print strings recursion fft_staged automata)
  (ocamlopt_flags (:standard -I +compiler-libs ocamlcommon.cmxa dynlink.cmxa codelib.cmx runnative.cmx lifts.cmx))
  (ocamlc_flags (:standard -I +compiler-libs ocamlcommon.cma ocamlbytecomp.cma ocamltoplevel.cma metalib.cma berstart.cmo))
  (preprocess future_syntax)

@@ -1,3 +1,7 @@
+(** Staging string matching code with increasing sophistication
+    Originally from https://www.cl.cam.ac.uk/events/metaprog/2019/files/strings.ml
+*)
+
 open Codelib
 
 let tests = [
@@ -31,8 +35,13 @@ let test_function name f =
 
 
 (** A simple (some might say "naive") string search algorithm *)
+(** Search for the pattern `p` in the string `s` *)
 let ssearch p s =
   let rec loop pi si =
+   (**
+    si: The offset pointing to the beginning of the current window
+    pi: How many character in the pattern matched starting from `si`?
+    *)
     if pi = String.length p then true
     else if si + pi = String.length s then false
     else if p.[pi] = s.[si + pi] then loop (pi + 1) si

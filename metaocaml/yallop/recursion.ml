@@ -208,6 +208,7 @@ let lenV () = fixV len'
 
    ↝  (by the definition of lenV: lenV = fixV len')
       fixV len' ('a'::'b'::[])
+     (fun x -> len' (fixV len') x) ('a'::'b'::[])
 
    ↝  (by the definition of fixV: fixV f = fun x -> f (fixV f) x)
       len' (fun x -> len' (fixV len') x) ('a'::'b'::[])
@@ -412,7 +413,7 @@ and s3 = function
 type state = S1 | S2 | S3
 
 (** Then we can construct the mutual recursion using fixV: *)
-let s = fixV (fun s -> function
+let _ = fixV (fun s -> function
  | S1 -> (function 'a' :: k -> s S2 k
                  | _ -> failwith "no transition")
  | S2 -> (function 'b' :: k -> s S2 k
@@ -444,6 +445,7 @@ let s = fixV (fun s -> function
     (The behaviour of the 'letrec' function is described further down.)
  *)
 
+
 let fixVS f x = Letrec.letrec f (fun r -> r x)
 (**
     And here is the type of fixVS specialized to the indexed type 'eo':
@@ -460,7 +462,20 @@ let _ = fixVS (fun eo -> function
 let evens = fixVS (fun eo -> function
                 | Even -> .< fun x -> x  = 0 || .~(eo Odd)  (x-1) >.
                 | Odd  -> .< fun x -> x <> 0 && .~(eo Even) (x-1) >.)
-              Even
+    Even
+
+let s = fixVS (fun s -> function
+ | S1 -> .<(function 'a' :: k -> .~(s S2) k
+                 | _ -> failwith "no transition")>.
+ | S2 -> .<(function 'b' :: k -> .~(s S2) k
+                 | 'c' :: k -> .~(s S3) k
+                 | _ -> failwith "no transition")>.
+ | S3 -> .<(function [] -> true
+                 | _ -> false)>.)
+
+let _ =
+  print_code Format.std_formatter (s S1); print_newline ()
+
 (** Here is the generated code for the above call:
 
   let rec x1 x = (x = 0) || (x2 (x - 1))
@@ -558,6 +573,19 @@ let even_odd_lr = Letrec.letrec (fun eo -> function
 (** (Exercise: can you generate mutually-recursive bindings for the
     state machine using Letrec.letrec?)  *)
 
+let s = Letrec.letrec (fun s -> function
+ | S1 -> .<(function 'a' :: k -> .~(s S2) k
+                 | _ -> failwith "no transition")>.
+ | S2 -> .<(function 'b' :: k -> .~(s S2) k
+                 | 'c' :: k -> .~(s S3) k
+                 | _ -> failwith "no transition")>.
+ | S3 -> .<(function [] -> true
+                   | _ -> false)>.)
+    (fun s -> .<.~(s S1), .~(s S2), .~(s S3)>.)
+
+let _ =
+  print_code Format.std_formatter s; print_newline ()
+
 (** Let's trace the behaviour of 'let rec' in the generation of evenlr.
 
     At a high level the behaviour is as follows:
@@ -641,7 +669,13 @@ let even_odd_lr = Letrec.letrec (fun eo -> function
          and x_620 i = (i = 0) || (x_614 (i - 1))
           in x_614>.
  *)
+let fs n = Letrec.letrec (fun fs i ->
+   if i = 0 then .<fun x -> x  = 0 || .~(fs (n-1)) (x - 1)>.
+   else          .<fun x -> x <> 0 && .~(fs (i-1)) (x - 1)>.)
+   (fun fs -> .<.~(fs 0)>.)
 
+let _ =
+  print_code Format.std_formatter (fs 4); print_newline ()
 
 (** The letrec package provides some syntactic sugar,
     which is sometimes more convenient .
