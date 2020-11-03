@@ -1,11 +1,9 @@
 (executables
- (names print strings recursion fft_staged automata)
+ (names print strings recursion fft_staged automata genfft)
  (ocamlopt_flags (:standard -I +compiler-libs ocamlcommon.cmxa dynlink.cmxa codelib.cmx runnative.cmx lifts.cmx))
  (ocamlc_flags (:standard -I +compiler-libs ocamlcommon.cma ocamlbytecomp.cma ocamltoplevel.cma metalib.cma berstart.cmo))
  (preprocess future_syntax)
  (libraries
-   core_bench
    base
-   letrec
    genlet
 ))

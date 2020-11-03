@@ -98,10 +98,11 @@ let test exponent do_bench =
   let arr = Fft_unstaged.Arr.mk exponent inp in
 
   if do_bench then
-    let open Core_bench in
-    [Bench.Test.create ~name:"staged" (fun () -> ignore(f inp));
-     Bench.Test.create ~name:"unstaged" (fun () -> ignore(Fft_unstaged.fft arr))]
-    |> Bench.bench
+    (* let open Core_bench in
+     * [Bench.Test.create ~name:"staged" (fun () -> ignore(f inp));
+     *  Bench.Test.create ~name:"unstaged" (fun () -> ignore(Fft_unstaged.fft arr))]
+     * |> Bench.bench *)
+    ()
   else begin
     print_code Format.std_formatter fft_cde; print_newline ();
     let res = f inp in
@@ -111,8 +112,14 @@ let test exponent do_bench =
     Array.iter (fun {re;im} -> Printf.printf "Unstaged: (%f, %f)\n" re im) (Fft_unstaged.Arr.unmk res)
   end
 
-let _ =
-  let exponent = S(S(Z)) in
-  test exponent false;
+
+let fft_16 =
+  let exponent = S(S(S(S(Z)))) in
+  let fft_cde = mk exponent in
+  Runnative.run fft_cde
+
+(* let _ =
+ *   let exponent = S(S(Z)) in
+ *   test exponent false; *)
   (* let exponent = S(S(S(S(S(Z))))) in
    * test exponent true; *)
