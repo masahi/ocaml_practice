@@ -17,7 +17,7 @@ let convert_array: 'a code array -> 'a array code =
 module MakeFFT(D: StagedDomain) = struct
   module Arr :
   sig
-    include Fft_unstaged.ARRAY with type elem = D.t
+    include ARRAY with type elem = D.t
 
     type elem_ = D.t_sta
 
@@ -28,7 +28,7 @@ module MakeFFT(D: StagedDomain) = struct
     val dyn : 'n t -> elem_ array code
   end =
   struct
-    include Fft_unstaged.Make_arr(struct type elem = D.t end)
+    include Make_arr(struct type elem = D.t end)
     type elem_ = D.t_sta
 
     (* Question 2(b)(i) *)
@@ -123,6 +123,6 @@ let fft_16 =
   Runnative.run fft_cde
 
 
-let _ =
-  let exponent = S(S(S(S(Z)))) in
-  test exponent false
+(* let _ =
+ *   let exponent = S(S(S(S(Z)))) in
+ *   test exponent false *)
