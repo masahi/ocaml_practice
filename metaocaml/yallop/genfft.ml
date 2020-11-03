@@ -6,7 +6,8 @@ let split arr =
   let odds = Array.init (n/2) (fun i -> arr.(2 * i + 1)) in
   evens, odds
 
-module MakeFFT(D: Domain)(Staged_D: StagedDomain with type t_sta = D.t) = struct
+module MakeFFT(Staged_D: StagedDomain) = struct
+  module D = Staged_D.Sta_D
   module FFT_staged = Fft_staged.MakeFFT(Staged_D)
 
   let merge evens odds =
@@ -40,7 +41,7 @@ end
 
 let _ =
   let size = 1024 in
-  let open MakeFFT(ComplexDomain)(ComplexStagedDomain) in
+  let open MakeFFT(ComplexStagedDomain) in
   let open Complex in
   let input = Array.init size (fun _ -> {re=Random.float 1.0; im=Random.float 1.0}) in
   let res = fft input in

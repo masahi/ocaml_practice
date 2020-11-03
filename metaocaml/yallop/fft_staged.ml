@@ -19,7 +19,7 @@ module MakeFFT(D: StagedDomain) = struct
   sig
     include ARRAY with type elem = D.t
 
-    type elem_ = D.t_sta
+    type elem_ = D.Sta_D.t
 
     (** Build an [Arr.t] value from an [array code] value. *)
     val mk : 'n nat -> elem_ array code -> 'n t
@@ -29,7 +29,7 @@ module MakeFFT(D: StagedDomain) = struct
   end =
   struct
     include Make_arr(struct type elem = D.t end)
-    type elem_ = D.t_sta
+    type elem_ = D.Sta_D.t
 
     (* Question 2(b)(i) *)
     let mk : type n. n nat -> elem_ array code -> n t = fun num cde_arr ->
@@ -60,7 +60,7 @@ module MakeFFT(D: StagedDomain) = struct
 
   end
 
-  let w n j = D.Sta (D.primitive_root_power n j)
+  let w n j = D.Sta (D.Sta_D.primitive_root_power n j)
 
   let merge l1 l2 =
     let open D in

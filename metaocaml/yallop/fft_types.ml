@@ -24,18 +24,16 @@ end
 
 module type StagedDomain =
 sig
-  type t_sta
+  module Sta_D: Domain
 
   type t =
-      Sta  : t_sta -> t
-    | Dyn : t_sta code -> t
-  val dyn_t : t -> t_sta code
+      Sta  : Sta_D.t -> t
+    | Dyn : Sta_D.t code -> t
+  val dyn_t : t -> Sta_D.t code
 
   val add : t -> t -> t
   val sub : t -> t -> t
   val mul : t -> t -> t
-  val zero: t
-  val primitive_root_power : int -> int -> t_sta
 end
 
 module ComplexDomain = struct
@@ -54,18 +52,18 @@ module ComplexDomain = struct
 end
 
 module ComplexStagedDomain = struct
-  type t_sta = Complex.t
+  module Sta_D = ComplexDomain
 
   type t =
-      Sta  : t_sta -> t
-    | Dyn : t_sta code -> t
+      Sta  : Sta_D.t -> t
+    | Dyn : Sta_D.t code -> t
 
-  let dyn_t : t -> t_sta code = function
+  let dyn_t : t -> Sta_D.t code = function
       Sta { Complex.re; im } -> .< { Complex.re = re; im = im }>.
     | Dyn v -> v
 
   let add l r = Dyn (genlet .<Complex.add .~(dyn_t l) .~(dyn_t r)>.)
-  let sub l r = Dyn (genlet .< Complex.sub .~(dyn_t l) .~(dyn_t r) >.)
+  let sub l r = Dyn (genlet .<Complex.sub .~(dyn_t l) .~(dyn_t r) >.)
 
   let mul l r =
     match l, r with
@@ -74,8 +72,6 @@ module ComplexStagedDomain = struct
     | Dyn _,  Sta ({re; im}) when re = 1.0 && im = 0.0 -> l
     | _ -> Dyn (genlet .< Complex.mul .~(dyn_t l) .~(dyn_t r) >.)
 
-  let zero = Sta (ComplexDomain.zero)
-  let primitive_root_power = ComplexDomain.primitive_root_power
 end
 
 
@@ -144,14 +140,14 @@ struct
   let append l r = Branch (l, r)
 
   let rec map2i' : type n. (int -> elem -> elem -> elem * elem) ->
-                          int -> n t  -> n t  -> n t  * n t * int =
+    int -> n t  -> n t  -> n t  * n t * int =
     fun f j l1 l2 ->
-      match l1, l2 with
-      | Leaf l, Leaf r -> let l', r' = f j l r in (Leaf l', Leaf r', succ j)
-      | Branch (a, b), Branch (c, d) ->
-        let a', c', j'  = map2i' f j  a c in
-        let b', d', j'' = map2i' f j' b d in
-        Branch (a', b'), Branch (c', d'), j''
+    match l1, l2 with
+    | Leaf l, Leaf r -> let l', r' = f j l r in (Leaf l', Leaf r', succ j)
+    | Branch (a, b), Branch (c, d) ->
+      let a', c', j'  = map2i' f j  a c in
+      let b', d', j'' = map2i' f j' b d in
+      Branch (a', b'), Branch (c', d'), j''
 
   let map2i f l1 l2 = let l1', l2', _ = map2i' f 0 l1 l2 in l1', l2'
 
