@@ -14,84 +14,88 @@ let convert_array: 'a code array -> 'a array code =
     .<Array.of_list .~lst_code >.
 
 
-module Arr :
-sig
-  include Fft_unstaged.ARRAY with type elem = complex_sd
+module MakeFFT(D: StagedDomain) = struct
+  module Arr :
+  sig
+    include Fft_unstaged.ARRAY with type elem = D.t
 
-  type elem_ = Complex.t
+    type elem_ = D.t_sta
 
-  (** Build an [Arr.t] value from an [array code] value. *)
-  val mk : 'n nat -> elem_ array code -> 'n t
+    (** Build an [Arr.t] value from an [array code] value. *)
+    val mk : 'n nat -> elem_ array code -> 'n t
 
-  (** Build an [array code] value from an [Arr.t] value. *)
-  val dyn : 'n t -> elem_ array code
-end =
-struct
-  include Fft_unstaged.Make_arr(struct type elem = complex_sd end)
-  type elem_ = Complex.t
+    (** Build an [array code] value from an [Arr.t] value. *)
+    val dyn : 'n t -> elem_ array code
+  end =
+  struct
+    include Fft_unstaged.Make_arr(struct type elem = D.t end)
+    type elem_ = D.t_sta
 
-  (* Question 2(b)(i) *)
-  let mk : type n. n nat -> Complex.t array code -> n t = fun num cde_arr ->
-    let rec mk_helper: type n. n nat -> Complex.t array code -> int -> int -> n t =
-      fun num cde_arr left_end right_end ->
-        match num with
-        | Z -> Leaf(Dyn(.<(.~cde_arr).(left_end)>.))
-        | S(n) ->
-          let left = mk_helper n cde_arr left_end (left_end + (right_end - left_end)/ 2) in
-          let right = mk_helper n cde_arr (left_end + (right_end - left_end)/ 2) right_end in
-          Branch(left, right)
-    in
-    let exponent = nat_to_int num in
-    let length = pow 2 exponent in
-    mk_helper num cde_arr 0 length
+    (* Question 2(b)(i) *)
+    let mk : type n. n nat -> elem_ array code -> n t = fun num cde_arr ->
+      let rec mk_helper: type n. n nat -> elem_ array code -> int -> int -> n t =
+        fun num cde_arr left_end right_end ->
+          match num with
+          | Z -> Leaf(D.Dyn(.<(.~cde_arr).(left_end)>.))
+          | S(n) ->
+            let left = mk_helper n cde_arr left_end (left_end + (right_end - left_end)/ 2) in
+            let right = mk_helper n cde_arr (left_end + (right_end - left_end)/ 2) right_end in
+            Branch(left, right)
+      in
+      let exponent = nat_to_int num in
+      let length = pow 2 exponent in
+      mk_helper num cde_arr 0 length
 
-  (* Question 2(b)(i) *)
-  let dyn : type n. n t -> Complex.t array code = fun arr ->
-    let rec dyn_helper : type n. n t -> Complex.t code array = function
-      | Leaf(Sta(v)) -> Array.init 1 (fun _ -> dyn_complex (Sta v))
-      | Leaf(Dyn(cde)) -> Array.init 1 (fun _ -> cde)
-      | Branch(left, right) ->
-        let left_cde = dyn_helper left in
-        let right_cde = dyn_helper right in
-        Array.append left_cde right_cde in
-    let cde_arr = dyn_helper arr in
-    convert_array cde_arr
+    (* Question 2(b)(i) *)
+    let dyn : type n. n t -> elem_ array code = fun arr ->
+      let rec dyn_helper : type n. n t -> elem_ code array = function
+        | Leaf(D.Sta(v)) -> Array.init 1 (fun _ -> D.dyn_t (Sta v))
+        | Leaf(Dyn(cde)) -> Array.init 1 (fun _ -> cde)
+        | Branch(left, right) ->
+          let left_cde = dyn_helper left in
+          let right_cde = dyn_helper right in
+          Array.append left_cde right_cde in
+      let cde_arr = dyn_helper arr in
+      convert_array cde_arr
 
+  end
+
+  let w n j = D.Sta (D.primitive_root_power n j)
+
+  let merge l1 l2 =
+    let open D in
+    let n = 2 * Arr.length l1 in
+    let a, b = Arr.map2i
+        (fun j x y ->
+           let z1 = mul (w n j) y in
+           let zx = add x z1 in
+           let zy = sub x z1 in
+           zx, zy)
+        l1 l2
+    in Arr.append a b
+
+  let rec fft : type n. n Arr.t -> n Arr.t =
+    fun arr -> match Arr.explength arr with
+        Z -> arr
+      | S _ -> let (evens,odds) = Arr.split arr in
+        merge (fft evens) (fft odds)
+
+  (* Question 2(b)(ii) *)
+  (** A code generator for building an FFT implementation specialized to
+      a particular array size. *)
+  let mk : type n. n nat -> (Arr.elem_ array -> Arr.elem_ array) code =
+    fun n ->
+    .<fun inp_arr -> .~(
+        let arr = Arr.mk n .<inp_arr>. in
+        let res = fft arr in
+        Arr.dyn res)>.
 end
 
-let w n j = Sta (Fft_unstaged.w n j)
-
-let merge l1 l2 =
-  let open Complex_staged in
-  let n = 2 * Arr.length l1 in
-  let a, b = Arr.map2i
-      (fun j x y ->
-         let z1 = mul (w n j) y in
-         let zx = add x z1 in
-         let zy = sub x z1 in
-         zx, zy)
-      l1 l2
-  in Arr.append a b
-
-let rec fft : type n. n Arr.t -> n Arr.t =
-  fun arr -> match Arr.explength arr with
-      Z -> arr
-    | S _ -> let (evens,odds) = Arr.split arr in
-             merge (fft evens) (fft odds)
-
-(* Question 2(b)(ii) *)
-(** A code generator for building an FFT implementation specialized to
-    a particular array size. *)
-let mk : type n. n nat -> (Complex.t array -> Complex.t array) code =
-  fun n ->
-  .<fun inp_arr -> .~(
-    let arr = Arr.mk n .<inp_arr>. in
-    let res = fft arr in
-    Arr.dyn res)>.
+module ComplexFFT = MakeFFT(ComplexStagedDomain)
 
 let test exponent do_bench =
+  let fft_cde = ComplexFFT.mk exponent in
   let arr_length = pow 2 (nat_to_int exponent) in
-  let fft_cde = mk exponent in
   let open Complex in
   let inp = Array.init arr_length (fun _ -> {re=Random.float 1.0; im=Random.float 1.0}) in
   let f = Runnative.run fft_cde in
@@ -115,11 +119,10 @@ let test exponent do_bench =
 
 let fft_16 =
   let exponent = S(S(S(S(Z)))) in
-  let fft_cde = mk exponent in
+  let fft_cde = ComplexFFT.mk exponent in
   Runnative.run fft_cde
 
-(* let _ =
- *   let exponent = S(S(Z)) in
- *   test exponent false; *)
-  (* let exponent = S(S(S(S(S(Z))))) in
-   * test exponent true; *)
+
+let _ =
+  let exponent = S(S(S(S(Z)))) in
+  test exponent false
